@@ -1,0 +1,7 @@
+FROM node:24.18.0-alpine
+WORKDIR /opt/validator
+COPY validation/package.json validation/package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund && npm cache clean --force
+COPY validation/check_web.mjs ./
+USER 10001:10001
+ENTRYPOINT ["node", "/opt/validator/check_web.mjs"]

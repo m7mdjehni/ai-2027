@@ -1,0 +1,13 @@
+# Optional backend-only credential mount. Keep the token file outside this repository.
+# Enable only after explicit approval of the first cloud acceptance test.
+services:
+  backend:
+    environment:
+      GITHUB_PUBLICATION_ENABLED: "${GITHUB_PUBLICATION_ENABLED:-0}"
+      GITHUB_ACTIONS_MIGRATION_ENABLED: "${GITHUB_ACTIONS_MIGRATION_ENABLED:-0}"
+      PUBLICATION_ORIGIN: "${PUBLICATION_ORIGIN:-http://localhost:8000}"
+    secrets:
+      - github_publish_token
+secrets:
+  github_publish_token:
+    file: ${GITHUB_PUBLISH_CREDENTIAL_FILE:?Set an external credential file path}

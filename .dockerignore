@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv
+venv
+.env
+.git
+.DS_Store
+*.sqlite3
+generated_projects/
+tests/
+runtime/
+**/node_modules/
