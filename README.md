@@ -1,573 +1,587 @@
-# Hermes AI Project Builder
+# 🤖 Hermes Autonomous Coding Agent
 
-Phase 1 extends the existing AI Personal Assistant with real project creation.
-Chat, Tasks, Notes, PostgreSQL, Docker, Ollama, and the existing Hermes router remain.
-Describe a development task in **Projects**, then inspect the files Hermes actually
-wrote. Project history survives backend restarts in PostgreSQL.
+> **An autonomous AI software-development system that can generate, validate, detect errors, repair code, revalidate, and publish software projects.**
 
-## Project Builder architecture
+**University IT Project — Abdullah Almakni**
+
+---
+
+## 📌 Project Overview
+
+Hermes Autonomous Coding Agent is an AI-powered development platform designed to go beyond a normal chatbot.
+
+Instead of only suggesting code, the system can work directly on a managed project workspace and perform a complete autonomous development cycle:
+
+**Prompt → Generate → Validate → Detect Errors → Repair → Revalidate → Publish**
+
+The system combines **Hermes Agent**, **GPT-5.6 Sol through OpenAI Codex**, **FastAPI**, **PostgreSQL**, and **Docker** to provide controlled autonomous software development.
+
+---
+
+## ✨ Key Features
+
+- 🤖 **AI Project Generation** — Generates real project files from natural-language instructions.
+- 📁 **Managed Workspaces** — Each project receives an isolated server-managed workspace.
+- 🔍 **Automatic Validation** — Generated static websites are checked inside a controlled Docker validator.
+- 🧠 **Error Detection** — Validation errors are captured and presented to the autonomous repair system.
+- 🔧 **Autonomous Self-Repair** — Hermes can inspect the validation failure and modify the affected files.
+- 🔁 **Automatic Revalidation** — Repaired projects must pass trusted validation before being considered successful.
+- 📊 **Durable Run History** — Runs, events, model attempts, validations, and repair results are persisted in PostgreSQL.
+- 🖥️ **Run Monitor** — The web interface displays project state, validation results, repair progress, and execution history.
+- ☁️ **GitHub Publication** — Validated static projects can be prepared and published to public GitHub repositories.
+- 🔐 **Restricted Tool Environment** — The coding agent receives only controlled project file operations rather than unrestricted system access.
+- 💬 **AI Assistant Features** — Chat, Tasks, and Notes remain available alongside the autonomous Project Builder.
+
+---
+
+## 🔄 Autonomous Development Workflow
 
 ```mermaid
 flowchart TD
-    U[User] --> W[Web Dashboard: Chat / Projects / Tasks / Notes]
-    W --> F[Docker FastAPI]
-    F --> P[Project Builder + PostgreSQL history]
-    P -->|host.docker.internal:8765 + private token| H[Windows Hermes Service]
-    H --> R[Existing Hermes Router]
-    R --> C[Task classification: project builds are coding]
-    C --> M[MiMo V2.5 / opencode-free]
-    M -->|429 / unavailable / timeout| G[GPT-5.6 Sol / openai-codex]
-    M --> A[Restricted Hermes Agent worker]
-    G --> A
-    A --> T[Project write / read / list tools]
-    T --> D[generated_projects/project-id/]
-    D -->|Read-only Docker bind mount| V[File detection + text viewer]
-    V --> W
-    R -->|Chat reasoning| G
+    U[User Prompt] --> UI[Web Dashboard]
+    UI --> API[FastAPI Backend]
+    API --> H[Hermes Host Service]
+    H --> AI[Hermes Agent + GPT-5.6 Sol / OpenAI Codex]
+
+    AI --> G[Generate Project Files]
+    G --> V[Docker Validation]
+
+    V -->|Passed| S[Validated Project]
+    V -->|Failed| E[Structured Error Detection]
+
+    E --> R[Autonomous Repair]
+    R --> V2[Revalidate]
+
+    V2 -->|Failed| R
+    V2 -->|Passed| S
+
+    S --> P[Publication Gate]
+    P --> GH[GitHub Publication]
 ```
 
-The Windows service runs `hermes_project_worker.py` using the Python environment
-of the installed Hermes Agent. This worker uses the real `AIAgent` conversation
-loop and existing Hermes provider authentication. It must call `project_write_file`
-to create files. An answer containing code or a claimed file list is insufficient.
-`hermes_router.route_prompt` supplies the model/provider and controls fallback;
-there is no second routing table. Normal chat still uses the original Hermes CLI.
+The important difference between this system and a basic AI chatbot is that a response containing code is **not considered project completion**. The agent must actually create or modify files inside the managed workspace.
 
-## Start the complete system (PowerShell)
+---
 
-Run in the repository directory. Your existing `.env` must be preserved:
+## 🏗️ System Architecture
 
-```powershell
-if (!(Test-Path .env)) { Copy-Item .env.example .env }
-if (!(Test-Path .venv)) { py -m venv .venv }
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```mermaid
+flowchart LR
+    B[Browser UI] --> F[FastAPI Backend]
+    F --> DB[(PostgreSQL)]
+    F -->|host.docker.internal:8765| HS[Windows Hermes Service]
+    HS --> HR[Hermes Router]
+    HR --> HA[Hermes Agent]
+    HA --> C[GPT-5.6 Sol / OpenAI Codex]
+    HA --> W[Restricted Project Tools]
+    W --> GP[generated_projects]
+    GP --> DV[Docker Validator]
+    DV --> F
+    F --> PUB[Publication Service]
+    PUB --> GH[GitHub]
 ```
 
-The implementation session configured `PROJECT_BUILDER_TOKEN` in your local
-`.env`. For a fresh checkout, generate one without printing it:
+### Main Components
 
-```powershell
-.\.venv\Scripts\python.exe -c "from dotenv import dotenv_values, set_key; import secrets; v=dotenv_values('.env'); set_key('.env', 'PROJECT_BUILDER_TOKEN', v.get('PROJECT_BUILDER_TOKEN') or secrets.token_urlsafe(48))"
-```
-
-The same `.env` is loaded by Compose and `hermes_service.py`. Tokens must have at
-least 32 characters. No token is sent to the browser. Use your configured database
-password; do not overwrite existing PostgreSQL settings or remove its volume.
-
-In the first terminal, stop any **old** host service with Ctrl+C, then start it:
-
-```powershell
-.\.venv\Scripts\python.exe hermes_service.py
-```
-
-The worker defaults to
-`%LOCALAPPDATA%/hermes/hermes-agent/venv/Scripts/python.exe`, which matches the
-inspected installation. For another installation, set `HERMES_PYTHON` in `.env`
-to the full path of its Python executable. Do not point this at Docker Python.
-The installed Hermes environment must provide `run_agent.AIAgent` and
-`hermes_cli.runtime_provider.resolve_runtime_provider`.
-
-In a second terminal:
-
-```powershell
-docker compose up --build -d
-docker compose ps
-Invoke-RestMethod http://localhost:8765/health
-Start-Process 'http://localhost:8000/static/index.html'
-```
-
-Open **Projects**, enter “Create a responsive website for a coffee shop”, and click
-**Build Project**. Both primary and fallback attempts can take up to 300 seconds
-each; the backend HTTP timeout defaults to 620 seconds. Change both timeout
-settings together if longer builds are required, and restart both services.
-
-## Workspace, history, and API
-
-Each build receives a server-generated 32-character UUID directory:
-
-```text
-generated_projects/
-    <project-id>/
-        index.html
-        css/style.css
-        script.js
-```
-
-Names above are examples. The API scans the real directory and reports only
-existing, validated files. The project display name is a slug derived from the
-prompt, while the filesystem uses only the UUID. Failed attempts can leave partial
-files for inspection. Fallback may inspect and complete those same files.
-
-| Endpoint | Purpose |
+| Component | Purpose |
 |---|---|
-| `POST /api/projects` | Build from `{"prompt":"Create a coffee shop website"}` |
-| `GET /api/projects?limit=50&offset=0` | Paginated PostgreSQL history |
-| `GET /api/projects/{project_id}` | Metadata and actual current file list |
-| `GET /api/projects/{project_id}/files` | Actual current file list |
-| `GET /api/projects/{project_id}/file?path=css/style.css` | Validated UTF-8 text as JSON |
-| Host `POST /projects/build` | Internal authenticated Windows execution endpoint |
+| **Web Dashboard** | User interface for Projects, Runs, Chat, Tasks, and Notes |
+| **FastAPI** | Main backend and API layer |
+| **PostgreSQL** | Persistent project, run, event, validation, and publication data |
+| **Hermes Service** | Secure bridge between Docker and the Windows-host Hermes environment |
+| **Hermes Agent** | Executes the autonomous coding workflow |
+| **GPT-5.6 Sol / OpenAI Codex** | AI model/provider used for coding and repair |
+| **Docker Validator** | Performs controlled validation of generated static websites |
+| **Publication Service** | Publishes eligible validated revisions to GitHub |
 
-Responses include `success`, `project_id`, `project_name`, `task_type`, `model`,
-`provider`, `fallback_used`, `status`, `created_at`, `message`, and (for build/detail)
-`files`. A POST returns HTTP 201 when the history record is created; inspect
-`success` and `status` to determine build success. Validation/configuration errors
-use 4xx/503 responses. A host HTTP timeout records `unknown`, because the worker
-may still finish; inspect host logs before retrying.
+---
 
-The additive `projects` table contains id, name, original_prompt, task_type, model,
-provider, fallback_used, status, message, and created_at. Existing startup
-`Base.metadata.create_all()` creates it without dropping or changing conversations,
-tasks, or notes. There is no new migration dependency.
+## 🧠 Autonomous Self-Repair
 
-## Phase 1 security and limitations
+One of the main objectives of this project is to demonstrate that an AI coding agent can do more than generate code.
 
-- The agent has only three project file tools. The entire tool execution dispatcher
-  is replaced, denying terminal, arbitrary filesystem, browser, delegation, and
-  code-execution calls even if the model invents them. Project rules, memories,
-  context files, and project plugins are not loaded. Generated code is never run.
-- The workspace root is fixed by application code. Prompts cannot set it. UUIDs,
-  filenames, and every path component are validated. Traversal, absolute/drive/UNC
-  paths, backslashes, alternate data streams, hidden files, reserved Windows device
-  names, symbolic links, junctions/reparse points, and hard links are rejected.
-- Only allowlisted UTF-8 text extensions are supported. Limits: 100 files, 512,000
-  bytes per file, 5,000,000 bytes per project, 10 path components, 12,000 prompt
-  characters, 40 agent iterations, and two concurrent host builds. Credential-like
-  filenames are rejected. The agent cannot read application `.env`, host user files,
-  or Hermes credentials through its tools. Avoid supplying secrets in prompts.
-- Docker mounts only `generated_projects` for project viewing, read-only. HTML,
-  JavaScript, and SVG are returned as JSON and displayed with `textContent`.
-  Generated projects are excluded from Git and Docker image contents.
-- **Website preview is pending.** `preview_available` is false; `preview_pending`
-  identifies an existing `index.html`. No generated static directory is mounted
-  as a web server. Future preview requires an isolated origin and restrictive sandbox.
-- This is an application-level tool boundary, not an OS sandbox for untrusted
-  Python or protection against a malicious local administrator modifying directories
-  concurrently. Hermes and its installed provider/runtime code remain trusted.
-  Do not give other processes write access to the generated workspace during builds.
-- The existing dashboard and chat service remain single-user and unauthenticated;
-  restrict backend/host ports to your local trusted environment. The new host build
-  endpoint requires the shared token. It never logs that token, prompts, or raw
-  provider output. Existing `/route` authentication behavior is unchanged.
-- Builds are synchronous and not a durable job queue. Closing the browser does not
-  cancel a build. Crashes may leave a `building` record; HTTP timeouts may leave
-  `unknown`. There is no automatic recovery, deletion, download, install, or execution.
-  History shows the latest 50 projects in the UI; the API supports pagination.
-- Hermes internal Python APIs can change; rerun compatibility checks after updates.
-  Live provider behavior and generated project quality require a real Hermes demo.
+The repair workflow is:
 
-## Offline tests and university demonstration
+1. A project revision is selected.
+2. The trusted validator checks the project.
+3. If validation fails, structured errors are recorded.
+4. Hermes receives the repair task.
+5. The agent inspects and modifies the relevant project files.
+6. The project is validated again.
+7. The process succeeds only when trusted validation passes.
 
-No extra test dependency, production database writes, or paid calls are needed:
+Repair attempts are bounded to prevent uncontrolled loops.
+
+### Real Repair Demonstration
+
+During live testing, a deliberate JavaScript syntax error was introduced into a generated project:
+
+```javascript
+const brokenDemo = ;
+```
+
+Validation correctly detected the JavaScript syntax error.
+
+The **Fix Project** workflow was then started. Hermes, using **GPT-5.6 Sol / OpenAI Codex**, repaired the project and the trusted validator passed the repaired revision.
+
+The final UI reported:
+
+```text
+Validation Passed
+Project repaired successfully
+```
+
+This demonstrates the complete autonomous cycle:
+
+**Detect → Repair → Revalidate → Success**
+
+---
+
+## 🛡️ Safe Validation
+
+Generated code is not blindly trusted.
+
+Static website validation runs through a dedicated Docker-based validation system.
+
+The validation environment is designed to:
+
+- inspect generated files safely;
+- detect HTML/JavaScript problems;
+- avoid executing generated package scripts;
+- operate without network access;
+- bind the generated workspace read-only where appropriate;
+- return structured validation results;
+- confirm cleanup before a revision becomes publication-eligible.
+
+A failed validation can become input to the bounded autonomous repair workflow.
+
+---
+
+## 📊 Durable Runs
+
+Autonomous operations are represented as durable runs stored in PostgreSQL.
+
+A run can preserve:
+
+- project ID;
+- requested revision;
+- current revision;
+- operation type;
+- status;
+- ordered timeline events;
+- model/provider attempts;
+- validation results;
+- changed files;
+- repair count;
+- cleanup state;
+- failure classification;
+- completion information.
+
+This allows execution history to survive backend restarts and provides evidence of what the autonomous agent actually performed.
+
+---
+
+## ☁️ GitHub Publication
+
+Validated static projects can pass through a controlled publication workflow.
+
+Before publication, the backend checks that:
+
+- the validation passed;
+- the validation belongs to the current project revision;
+- the expected validation profile was used;
+- cleanup was confirmed;
+- the project is eligible for publication.
+
+The publication system can then export the validated website and publish it to a GitHub repository.
+
+This creates the complete workflow:
+
+**AI Request → Generated Software → Validation → Autonomous Repair → Verified Revision → Cloud Publication**
+
+---
+
+## 🧰 Technology Stack
+
+### Backend
+- Python
+- FastAPI
+- Uvicorn
+- SQLAlchemy
+
+### AI
+- Hermes Agent
+- GPT-5.6 Sol
+- OpenAI Codex provider
+- Optional Ollama integration
+
+### Infrastructure
+- Docker
+- Docker Compose
+- PostgreSQL 15
+- Windows host service
+
+### Frontend
+- HTML
+- CSS
+- JavaScript
+
+### Development & Cloud
+- Git
+- GitHub
+- PowerShell
+
+---
+
+## 📂 Project Structure
+
+```text
+Hermes-Autonomous-Coding-Agent/
+│
+├── app/
+│   ├── routers/
+│   │   ├── conversation.py
+│   │   ├── projects.py
+│   │   ├── publications.py
+│   │   ├── runs.py
+│   │   ├── tasks.py
+│   │   └── notes.py
+│   │
+│   ├── migrations/
+│   ├── static/
+│   ├── ai.py
+│   ├── database.py
+│   ├── models.py
+│   ├── project_workspace.py
+│   ├── publication_service.py
+│   ├── run_store.py
+│   └── validation_contracts.py
+│
+├── docs/
+│   └── screenshots/
+│
+├── generated_projects/
+│   └── .gitkeep
+│
+├── tests/
+├── validation/
+│
+├── hermes_service.py
+├── hermes_router.py
+├── hermes_projects.py
+├── hermes_project_worker.py
+├── hermes_repair.py
+├── hermes_validation.py
+├── hermes_run_dispatcher.py
+├── hermes_run_recovery.py
+├── hermes_project_watchdog.py
+├── hermes_publication_export.py
+│
+├── compose.yaml
+├── compose.publication.yaml
+├── Dockerfile
+├── requirements.txt
+├── .env.example
+└── README.md
+```
+
+---
+
+## 🚀 Running the Project
+
+### Prerequisites
+
+The development environment requires:
+
+- Windows
+- Python
+- Docker Desktop
+- Docker Compose
+- Git
+- Hermes Agent with a configured supported provider
+
+---
+
+### 1. Clone the Repository
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
-.\.venv\Scripts\python.exe -m compileall -q app hermes_router.py hermes_service.py hermes_projects.py hermes_project_worker.py
-node --check app/static/projects.js
-node tests/frontend_projects.test.cjs
-& "$env:LOCALAPPDATA\hermes\hermes-agent\venv\Scripts\python.exe" -I tests/check_hermes_worker.py
+git clone https://github.com/Makni011/Hermes-Autonomous-Coding-Agent.git
+cd Hermes-Autonomous-Coding-Agent
 ```
 
-Tests exercise real FastAPI ASGI routes using isolated SQLite and temporary
-workspaces, with only host/provider calls mocked. Coverage includes creation,
-history, file list/read, traversal, host authentication, text/size restrictions,
-link rejection, actual restricted tool dispatch, fallback/429/timeout errors, model
-metadata, `/api/converse`, Tasks, Notes, and the retained Ollama adapter. The symlink
-test skips when Windows does not grant permission to create links.
-The Node DOM harness verifies submit/history/file-viewer flows and inert HTML
-rendering; it is not a visual browser test. The optional installed-Hermes smoke
-test constructs a real agent with a temporary profile, mocks its model turn, and
-blocks socket connections. An attempted model-metadata lookup may report that
-network access was intentionally disabled.
+---
 
-For a presentation:
-
-1. Show the diagram and explain Docker-to-Windows routing and the three restricted tools.
-2. Open Projects and build a coffee shop website. This step makes real provider calls.
-3. Show the host logs: coding, MiMo/OpenCode, optional fallback, and files detected.
-4. Show the real directory, click files in the viewer, and explain why HTML stays text.
-5. Refresh history to demonstrate PostgreSQL persistence and actual model metadata.
-6. Show Chat, a Task, and a Note to demonstrate retained functionality.
-7. Run the offline suite to demonstrate forced HTTP 429 fallback safely without
-   changing provider credentials. Do not claim a real fallback unless it happened.
-
-Optional real build API command (uses your configured providers):
+### 2. Create the Environment File
 
 ```powershell
-$body = @{ prompt = 'Create a responsive website for a coffee shop' } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/projects -ContentType 'application/json' -Body $body
-docker compose logs --tail=50 backend
+Copy-Item .env.example .env
 ```
 
-## Existing assistant documentation
+Configure the required local values in `.env`.
 
-A Dockerized personal assistant with a browser UI, FastAPI, PostgreSQL, Tasks,
-Notes, a Windows-host Hermes Agent multi-model router, and retained Ollama local
-model support.
+> **Never commit `.env`, API keys, access tokens, OAuth credentials, or real passwords.**
 
-## Architecture
+---
 
-```text
-Browser
-  |
-  | POST /api/converse
-  v
-FastAPI backend (Docker) -----------------> PostgreSQL 15 (Docker)
-  |
-  | http://host.docker.internal:8765/route
-  v
-Hermes router service (Windows host)
-  |
-  +-- task classifier
-  |     +-- coding
-  |     `-- reasoning/general
-  |
-  +-- coding: mimo-v2.5-free / opencode-free
-  |       `-- automatic fallback on 429 or provider failure
-  |           gpt-5.6-sol / openai-codex
-  |
-  `-- reasoning: gpt-5.6-sol / openai-codex
-          |
-          v
-      Hermes Agent CLI
-```
-
-The browser never calls the host router directly. It keeps using the existing
-FastAPI backend. Conversation messages and replies are stored in PostgreSQL;
-Tasks and Notes retain their existing database-backed endpoints.
-
-Ollama is still supported. Set `AI_PROVIDER=ollama` to use the original
-Docker-to-Windows Ollama path instead of Hermes.
-
-## Model routing
-
-`hermes_router.py` classifies only the current user prompt. Coding terms include
-common languages, frameworks, web-development terms, debugging, APIs, databases,
-Docker, and English/Arabic creation phrases. Prompts without a coding match are
-treated as reasoning/general tasks.
-
-| Task type | Primary model | Provider | Fallback |
-|---|---|---|---|
-| Coding | `mimo-v2.5-free` | `opencode-free` | `gpt-5.6-sol` / `openai-codex` |
-| Reasoning/general | `gpt-5.6-sol` | `openai-codex` | None |
-
-Hermes is invoked on Windows as an argument list, without a shell:
-
-```text
-hermes -z "PROMPT" --model MODEL --provider PROVIDER
-```
-
-A non-zero exit, HTTP/provider error text, rate limit, timeout, connection error,
-or empty output counts as failure. For coding tasks, the router automatically
-tries GPT-5.6 Sol after a MiMo failure, including HTTP 429. It never returns a
-hardcoded AI answer.
-
-The host console provides presentation-friendly logs such as:
-
-```text
-Task type: coding
-Selected model: mimo-v2.5-free
-Provider: opencode-free
-Primary model failed: HTTP 429
-Activating fallback
-Selected model: gpt-5.6-sol
-Provider: openai-codex
-```
-
-Raw failed-provider output is not returned to the browser and is not written to
-application logs, reducing the chance of exposing tokens or credentials.
-
-## Project structure
-
-```text
-AI-Personal-Assistant/
-|-- app/
-|   |-- ai.py                    # Hermes HTTP client and retained Ollama adapter
-|   |-- crud.py                  # Conversation, Task, and Note database operations
-|   |-- database.py              # PostgreSQL connection and startup retry
-|   |-- main.py                  # Docker FastAPI application
-|   |-- models.py
-|   |-- schemas.py
-|   |-- routers/
-|   |   |-- conversation.py      # Existing /api/converse, now routed to Hermes
-|   |   |-- tasks.py
-|   |   `-- notes.py
-|   `-- static/index.html        # Existing browser frontend
-|-- hermes_router.py             # Classifier, model selection, CLI execution, fallback
-|-- hermes_service.py            # Windows-host FastAPI /route service
-|-- compose.yaml
-|-- Dockerfile
-|-- requirements.txt
-`-- .env.example
-```
-
-## Configuration
-
-Create the local configuration file once:
-
-```powershell
-if (!(Test-Path .env)) { Copy-Item .env.example .env }
-```
-
-Relevant values are:
-
-```dotenv
-AI_PROVIDER=hermes
-HERMES_ROUTER_URL=http://host.docker.internal:8765
-HERMES_ROUTER_TIMEOUT=620
-HERMES_COMMAND_TIMEOUT=300
-HERMES_PROJECT_WORKER_TIMEOUT=900
-HERMES_ROUTER_PORT=8765
-
-OLLAMA_BASE_URL=http://host.docker.internal:11434
-OLLAMA_MODEL=llama3.2:3b
-
-POSTGRES_USER=assistant
-POSTGRES_PASSWORD=replace-this-value
-POSTGRES_DB=assistantdb
-BACKEND_PORT=8000
-```
-
-`HERMES_COMMAND_TIMEOUT` configures normal Hermes chat commands. The
-Project Builder worker uses its dedicated `HERMES_PROJECT_WORKER_TIMEOUT`
-setting, defaulting to 900 seconds, while `HERMES_ROUTER_PORT` configures the
-Windows host process. `HERMES_ROUTER_TIMEOUT` configures the Docker backend
-and is longer because one coding request may make both primary and fallback
-attempts.
-
-Never commit `.env`, API keys, OAuth credentials, tokens, or real passwords.
-The project ignores `.env` in both Git and the Docker build context.
-
-## Run on Windows
-
-Prerequisites are Docker Desktop, a working `hermes` command on the Windows host,
-and Python. The pinned project requirements already contain FastAPI and Uvicorn.
-
-Open PowerShell in the project directory. Install dependencies into a virtual
-environment if they are not already available:
+### 3. Create a Python Virtual Environment
 
 ```powershell
 py -m venv .venv
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 ```
 
-Verify Hermes in that same shell, then start the host router:
+---
+
+### 4. Configure the Project Builder Token
+
+Generate a local project-builder token without printing it:
 
 ```powershell
-hermes --help
+python -c "from dotenv import dotenv_values, set_key; import secrets; v=dotenv_values('.env'); set_key('.env', 'PROJECT_BUILDER_TOKEN', v.get('PROJECT_BUILDER_TOKEN') or secrets.token_urlsafe(48))"
+```
+
+The same local `.env` configuration is used by the Docker application and Windows Hermes service.
+
+---
+
+### 5. Start the Hermes Host Service
+
+In the first PowerShell terminal:
+
+```powershell
 python hermes_service.py
 ```
 
-Leave that PowerShell window open. The service listens on port 8765 and must run
-on Windows, not in Docker. If Windows Firewall prompts for access, allow the
-private Docker Desktop network only as appropriate for your machine.
+The service listens on:
 
-In a second PowerShell window, start the existing application:
+```text
+http://localhost:8765
+```
+
+Check it with:
 
 ```powershell
-if (!(Test-Path .env)) { Copy-Item .env.example .env }
-# Edit .env and replace the example database password.
+Invoke-RestMethod http://localhost:8765/health
+```
+
+Keep this terminal running.
+
+---
+
+### 6. Start the Application
+
+Open another PowerShell terminal in the repository:
+
+```powershell
 docker compose up --build -d
 docker compose ps
 ```
 
-Open:
+Then open:
 
 ```text
 http://localhost:8000/static/index.html
 ```
 
-## API endpoints
+---
 
-### Windows host router
+## 🎮 Basic Usage
 
-- `GET http://localhost:8765/health`
-- `POST http://localhost:8765/route`
-- `GET http://localhost:8765/docs`
+### Build a Project
 
-Minimal request:
+1. Open **Projects**.
+2. Enter a development request, for example:
 
-```json
-{
-  "prompt": "Create a website for a travel company"
-}
+```text
+Create a modern responsive portfolio website for a university IT student.
 ```
 
-Successful response shape:
+3. Click **Build Project**.
+4. Wait for Hermes to generate the project.
+5. Inspect the generated files.
 
-```json
-{
-  "success": true,
-  "task_type": "coding",
-  "model": "gpt-5.6-sol",
-  "provider": "openai-codex",
-  "fallback_used": true,
-  "response": "...",
-  "error": null
-}
-```
+### Validate
 
-The endpoint also accepts an optional `history` array. The Docker backend sends
-up to 20 existing conversation messages for context.
+Click **Validate** to run the trusted static-web validation profile.
 
-### Docker backend
+### Repair
 
-- `GET /`
-- `POST /api/converse`
-- `GET /api/conversations`
-- `GET`, `POST /api/tasks`
-- `POST /api/tasks/{id}/done`
-- `DELETE /api/tasks/{id}`
-- `GET`, `POST /api/notes`
-- `DELETE /api/notes/{id}`
-- `GET /docs`
+If validation fails, click **Fix Project**.
 
-`POST /api/converse` keeps `reply` for frontend compatibility and adds routing
-metadata (`task_type`, `model`, `provider`, and `fallback_used`) for diagnostics.
+The autonomous agent can:
 
-## Testing
+**inspect errors → modify files → revalidate → report the final result**
 
-Test host health:
+### View Runs
+
+Use **View Runs** to inspect durable execution history and timeline events.
+
+### Publish
+
+A validated current revision with confirmed cleanup can proceed through the publication workflow.
+
+---
+
+## 🧪 Testing
+
+The repository includes Python, Docker, frontend, persistence, watchdog, validation, repair, and publication tests.
+
+### Python Test Suite
 
 ```powershell
-Invoke-RestMethod http://localhost:8765/health
+python -m unittest discover -s tests -v
 ```
 
-Test coding classification and real Hermes execution directly:
+### Static Compilation Check
 
 ```powershell
-$body = @{ prompt = 'Create a website for a travel company' } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri http://localhost:8765/route -ContentType 'application/json' -Body $body
+python -m compileall -q app hermes_router.py hermes_service.py hermes_projects.py hermes_project_worker.py
 ```
 
-Test reasoning routing:
+### Frontend Tests
 
 ```powershell
-$body = @{ prompt = 'Explain why the sky appears blue' } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri http://localhost:8765/route -ContentType 'application/json' -Body $body
+node tests/frontend_projects.test.cjs
+node tests/frontend_runs.test.cjs
+node tests/frontend_publications.test.cjs
 ```
 
-Test Docker-to-host connectivity:
+### Docker Validation Integration
+
+With Docker running:
 
 ```powershell
-docker compose exec backend python -c "import requests; print(requests.get('http://host.docker.internal:8765/health', timeout=10).json())"
+python .\tests\check_validation_docker.py
 ```
 
-Test the complete browser/backend route:
+### PostgreSQL Publication Tests
 
 ```powershell
-$body = @{ message = 'Create a Python function that adds two numbers' } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/converse -ContentType 'application/json' -Body $body
+python .\tests\check_publications_postgres.py
 ```
 
-Watch the presentation logs in the host-router PowerShell window. Backend logs
-are available with:
+---
 
-```powershell
-docker compose logs -f backend
-```
+## 🔐 Security Design
 
-MiMo fallback is naturally demonstrated when MiMo returns 429. Do not intentionally
-invalidate or expose credentials to force an error.
+Autonomous coding requires strict boundaries.
 
-## Ollama local-model option
+This project includes several application-level protections:
 
-The original Ollama adapter remains in `app/ai.py`. To select it, edit `.env`:
+- fixed server-managed workspace roots;
+- UUID-based project directories;
+- path traversal protection;
+- rejection of absolute and unsafe paths;
+- restricted UTF-8 text file types;
+- project/file size limits;
+- restricted agent tool dispatch;
+- no unrestricted terminal tool for project generation;
+- credential-like filename rejection;
+- `.env` excluded from Git;
+- secrets excluded from generated project access;
+- authenticated Docker-to-host Project Builder operations;
+- controlled Docker validation;
+- bounded repair attempts;
+- revision-bound validation evidence;
+- cleanup confirmation before publication.
 
-```dotenv
-AI_PROVIDER=ollama
-OLLAMA_BASE_URL=http://host.docker.internal:11434
-OLLAMA_MODEL=llama3.2:3b
-```
+Generated AI code should still be treated as untrusted until it passes the appropriate review and validation.
 
-Start Ollama on Windows and recreate the backend so it receives the changed
-environment:
+---
 
-```powershell
-ollama list
-docker compose up --build -d --force-recreate backend
-```
+## 📸 Project Evidence
 
-Switch `AI_PROVIDER` back to `hermes` and recreate the backend to restore the
-multi-model path.
+The repository contains screenshots from major development and acceptance stages.
 
-## Error handling and limitations
+### Autonomous Run
 
-- Each Hermes CLI attempt defaults to 300 seconds. A coding request can take two
-  attempts when fallback is required.
-- Calls are synchronous and non-streaming.
-- The keyword classifier is deterministic and intentionally simple; ambiguous
-  prompts may be classified as reasoning.
-- Reasoning uses GPT-5.6 Sol directly and has no second configured fallback.
-- The host service depends on the Windows account's working Hermes installation,
-  provider configuration, network access, and PATH.
-- Binding to `0.0.0.0` is required for Docker Desktop access. The service has no
-  authentication, so keep port 8765 restricted to trusted local/private networks.
-- PostgreSQL conversation history is global; there is no user authentication or
-  per-user isolation.
-- If the host service is stopped, Hermes chat returns a clear 503 error. Tasks,
-  Notes, PostgreSQL, and the Ollama option remain available.
+![Completed autonomous run](docs/screenshots/phase4-completed.png)
 
-## Static website validation (autonomous-agent Phase 1)
+### Provider Failure Handling
 
-The safe validation foundation is implemented as an authenticated backend/host
-operation with a fixed, network-disabled Docker parser. It never executes generated
-JavaScript or package scripts. See [the validation guide](docs/VALIDATION_FOUNDATION.md)
-for image setup, API usage, security controls, test results, limitations, and the
-Phase 2 approval boundary.
+![Provider failure handling](docs/screenshots/phase4-provider-failure.png)
 
-## Bounded repairs (autonomous-agent Phase 2)
+### Live Autonomous Repair Acceptance
 
-Existing managed static websites can be repaired through the backend repair API.
-The loop validates a protected baseline, permits at most three restricted Hermes
-repair turns, and requires a trusted final validation pass. See the
-[Phase 2 guide](docs/BOUNDED_REPAIR_PHASE2.md) for API usage, cancellation, limits,
-checkpoints, offline tests and remaining release gates.
+![Live acceptance](docs/screenshots/phase5-live-acceptance.png)
 
-## Durable repair runs (autonomous-agent Phase 3)
+### Publication Preview
 
-The durable run APIs persist queued work, ordered events, model attempts and
-validation results in PostgreSQL. The Windows bridge claims jobs with renewable
-leases and preserves project protection after uncertain cleanup. See the
-[Phase 3 operating guide](docs/DURABLE_RUNS_PHASE3.md) for migrations, submission,
-persistent cancellation, recovery, checkpoint retention and test results.
+![Publication preview](docs/screenshots/phase6-publication-preview.png)
 
-## Autonomous run monitor (Phase 4)
+### Live GitHub Publication
 
-Existing projects now offer Validate, Fix Project and View Runs. The monitor reads
-persisted stages/events, shows structured validation errors and changed files, and
-supports cancellation and fresh retries. See the [Phase 4 guide](docs/RUN_MONITOR_PHASE4.md)
-for polling behavior, security, offline screenshots and tests. Live provider testing
-remains a separately approved release gate.
+![Live publication](docs/screenshots/phase6-live-publication.png)
 
-## Live provider acceptance (Phase 5)
+---
 
-The single approved live Hermes/Codex repair acceptance test passed: one repair,
-two durable validations, an actual script.js edit, and confirmed cleanup. See the
-[Phase 5 report](docs/LIVE_ACCEPTANCE_PHASE5.md) for the preserved run, timestamps,
-safe diagnostics and real UI screenshot. This was one bounded acceptance run;
-further provider tests and cloud integration require separate approval.
+## 📚 Technical Documentation
 
-## Troubleshooting
+Detailed engineering documentation is available in the `docs/` directory:
 
-If Docker cannot reach Hermes, confirm the Windows service is running, check
-`http://localhost:8765/health`, then run the Docker-to-host test above. Use
-`host.docker.internal`, never `localhost`, from inside the backend container.
+- [Validation Foundation](docs/VALIDATION_FOUNDATION.md)
+- [Bounded Repair](docs/BOUNDED_REPAIR_PHASE2.md)
+- [Durable Runs](docs/DURABLE_RUNS_PHASE3.md)
+- [Run Monitor](docs/RUN_MONITOR_PHASE4.md)
+- [Live Provider Acceptance](docs/LIVE_ACCEPTANCE_PHASE5.md)
+- [GitHub Publication](docs/PUBLICATION_PHASE6.md)
+- [Standalone Validation Persistence](docs/STANDALONE_VALIDATION_PERSISTENCE.md)
+- [Project Builder Watchdog](docs/PROJECT_CODEX_WATCHDOG.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Demo Guide](docs/DEMO.md)
+- [Presentation Guide](docs/PRESENTATION.md)
 
-If `hermes` is not found, start the host service from the same PowerShell profile
-where `hermes -z "test" --model gpt-5.6-sol --provider openai-codex` works.
+---
 
-If the backend still uses an old provider setting, recreate it:
+## ⚠️ Limitations
 
-```powershell
-docker compose up --build -d --force-recreate backend
-```
+- The Hermes host service depends on a correctly configured local Hermes installation.
+- Live AI operations require access to the configured model/provider.
+- Generated software should be reviewed before use in a production environment.
+- The current validation profile focuses primarily on managed static web projects.
+- The system provides application-level restrictions and is not intended to replace a full operating-system security sandbox.
 
-Safe static publication is documented in [Phase 6 offline readiness](docs/PUBLICATION_PHASE6.md).
-GitHub publication remains disabled until the first cloud acceptance test is explicitly approved.
+---
 
-Stop containers without deleting PostgreSQL data:
+## 🎯 Project Objective
 
-```powershell
-docker compose down
-```
+The objective of this university project is to demonstrate how an AI assistant can evolve from simply **answering programming questions** into an **autonomous software-development agent** capable of taking controlled actions and verifying its own work.
+
+The project demonstrates:
+
+> **AI reasoning + tool use + code generation + validation + self-repair + persistent execution history + cloud publication**
+
+---
+
+## 👨‍💻 Author
+
+**Abdullah Almakni**
+
+Information Technology Student  
+University Project — 2026
+
+---
+
+## 📄 Project Status
+
+**Core autonomous workflow successfully implemented and demonstrated.**
+
+- ✅ AI project generation
+- ✅ Restricted file tool execution
+- ✅ Static website validation
+- ✅ Autonomous error detection
+- ✅ Bounded self-repair
+- ✅ Automatic revalidation
+- ✅ Durable PostgreSQL run history
+- ✅ Run monitoring
+- ✅ Live GPT-5.6 Sol / OpenAI Codex acceptance
+- ✅ GitHub publication workflow
+- ✅ Security and regression testing
+
+---
+
+### Hermes Autonomous Coding Agent
+
+**From a natural-language request to validated, repaired, and publishable software.**
