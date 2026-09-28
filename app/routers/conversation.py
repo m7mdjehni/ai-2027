@@ -43,7 +43,7 @@ def converse(payload: dict, db: Session = Depends(get_db)):
     history_serialized = [{"role": h.role, "message": h.message} for h in history]
     # save user message
     crud.create_conversation(db, role='user', message=message)
-    # Call Hermes by default; Ollama remains available through AI_PROVIDER.
+    # Ollama is the default; online routing requires explicit configuration.
     try:
         result = call_assistant(history_serialized, message)
         reply = result["response"]

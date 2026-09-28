@@ -1,4 +1,8 @@
-param([switch]$StartHermesDashboard)
+param([switch]$StartHermesDashboard, [switch]$Online)
+if (-not $Online -and -not $StartHermesDashboard) {
+    & (Join-Path $PSScriptRoot 'start_offline.ps1')
+    exit $LASTEXITCODE
+}
 $ErrorActionPreference = 'Stop'
 $projectRoot = $PSScriptRoot
 $python = Join-Path $projectRoot '.venv\Scripts\python.exe'
@@ -48,7 +52,7 @@ try {
         $imagePresent = $LASTEXITCODE -eq 0
     } catch { $imagePresent = $false }
     if (-not $imagePresent) {
-        & docker build -f validation/Dockerfile.web -t hermes-validator-web:phase1 validation
+        & docker build -f validation/Dockerfile.web -t hermes-validator-web:phase1 .
         if ($LASTEXITCODE -ne 0) { throw 'Validator image build failed.' }
     }
     if (-not (Test-Http 'http://127.0.0.1:8765/health')) {

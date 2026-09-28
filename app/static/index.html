@@ -817,9 +817,9 @@
       <div class="model-status">
         <div class="status-indicator">
           <div class="status-dot"></div>
-          <span id="modelStatusText">Online</span>
+          <span id="modelStatusText">Ready</span>
         </div>
-        <div class="model-name" id="modelName">Hermes Agent</div>
+        <div class="model-name" id="modelName">Local AI</div>
         <div class="model-label" id="modelLabel">Multi-Model Router</div>
       </div>
     </div>
@@ -829,9 +829,9 @@
       <div class="header">
         <div>
           <div class="header-title">Hermes AI Project Builder</div>
-          <div class="header-subtitle">Powered by Hermes Agent • Multi-Model AI</div>
+          <div class="header-subtitle">Offline-first with local Ollama</div>
         </div>
-        <div class="badge">Hermes • Multi-Model</div>
+        <div class="badge">Local AI / Optional online providers</div>
       </div>
 
       <div class="content-area">
@@ -840,7 +840,7 @@
           <div class="chat-messages" id="chat"></div>
           <div class="chat-input-area">
             <div class="input-container">
-              <textarea id="message" placeholder="Ask Hermes anything..." rows="1"></textarea>
+              <textarea id="message" placeholder="Ask your local assistant..." rows="1"></textarea>
               <button class="send-btn" id="send">
                 <span id="sendIcon">↗</span>
               </button>
@@ -946,7 +946,7 @@
       const provider = cleanDisplayName(data.provider, providerDisplayNames, 'AI Provider');
 
       if (data.provider === 'ollama') {
-        setModelStatus('Online', model, `Local • ${provider}`);
+        setModelStatus('Local', model, `Local • ${provider}`);
       } else if (data.fallback_used) {
         setModelStatus('Fallback Active', model, 'MiMo → GPT-5.6 Sol', 'fallback');
       } else {
@@ -973,8 +973,8 @@
       document.getElementById('sendIcon').innerHTML = '<span class="loading-spinner"></span>';
 
       appendMessage('user', message);
-      const loadingMessage = appendMessage('loading', 'Hermes is selecting the best model...');
-      setModelStatus('Selecting Model', 'Hermes Agent', 'Choosing the best model...', 'loading');
+      const loadingMessage = appendMessage('loading', 'Waiting for the configured AI provider...');
+      setModelStatus('Working', 'AI Assistant', 'Generating a response...', 'loading');
       document.getElementById('message').value = '';
       autoResizeTextarea();
 
@@ -1001,7 +1001,7 @@
       } catch (error) {
         loadingMessage.remove();
         appendMessage('error', 'Unable to contact the assistant. Please try again.');
-        setModelStatus('Connection Error', 'Hermes Agent', '', 'error');
+        setModelStatus('Connection Error', 'AI Assistant', '', 'error');
       } finally {
         isLoading = false;
         document.getElementById('send').disabled = false;

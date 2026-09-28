@@ -79,7 +79,7 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
     db.refresh(row)
     files = []
     try:
-        url = os.getenv("HERMES_ROUTER_URL", "http://host.docker.internal:8765").rstrip("/")
+        url = os.getenv("HERMES_ROUTER_URL", "http://host.docker.internal:8766").rstrip("/")
         try:
             timeout = max(620, int(os.getenv("HERMES_ROUTER_TIMEOUT", "620")))
         except ValueError:
@@ -147,7 +147,7 @@ def validate_existing_project(project_id: str, payload: ValidateProject, db: Ses
     token = os.getenv("PROJECT_BUILDER_TOKEN", "")
     if len(token) < 32:
         raise HTTPException(503, "Project service authentication is not configured")
-    url = os.getenv("HERMES_ROUTER_URL", "http://host.docker.internal:8765").rstrip('/')
+    url = os.getenv("HERMES_ROUTER_URL", "http://host.docker.internal:8766").rstrip('/')
     try:
         if capture_revision(project_id)[0] != payload.revision:
             raise HTTPException(409, 'Stale project revision')
@@ -197,7 +197,7 @@ def repair_host_call(path, payload, timeout):
     token = os.getenv('PROJECT_BUILDER_TOKEN', '')
     if len(token) < 32:
         raise HTTPException(503, 'Project service authentication is not configured')
-    url = os.getenv('HERMES_ROUTER_URL', 'http://host.docker.internal:8765').rstrip('/')
+    url = os.getenv('HERMES_ROUTER_URL', 'http://host.docker.internal:8766').rstrip('/')
     try:
         response = requests.post(url + path, json=payload, headers={'X-Project-Token': token}, timeout=timeout)
         if response.status_code in {404, 409, 429}:

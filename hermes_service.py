@@ -38,12 +38,19 @@ class RouteRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "hermes-router"}
+    return {"status": "ok", "service": "hermes-router",
+            "project_engine": os.getenv("PROJECT_AI_ENGINE", "ollama"),
+            "chat_provider": os.getenv("AI_PROVIDER", "ollama")}
 
 
 @app.post("/route")
 def route(request: RouteRequest):
     history = [item.dict() for item in request.history] if request.history else None
+    if os.getenv('AI_PROVIDER', 'ollama') == 'ollama':
+        from app.ollama_client import chat, model_name
+        from app.ai import build_messages
+        return {'success': True, 'response': chat(build_messages(history or [], request.prompt), host=True),
+                'provider': 'ollama', 'model': model_name(), 'task_type': 'general', 'fallback_used': False}
     result = route_prompt(request.prompt, history).to_dict()
     if result["success"]:
         return result

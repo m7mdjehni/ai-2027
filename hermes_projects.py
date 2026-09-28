@@ -4,6 +4,7 @@ import logging
 import os
 import subprocess
 import time
+import sys
 from pathlib import Path
 
 from app.project_workspace import workspace, list_files
@@ -72,7 +73,12 @@ def hermes_python():
 
 
 def build_project(project_id, prompt):
-    if os.getenv('PROJECT_AI_ENGINE', 'codex').lower() == 'codex':
+    if os.getenv('PROJECT_AI_ENGINE', 'ollama').lower() == 'ollama':
+        workspace(project_id, create=True)
+        result = local_worker({'project_id': project_id, 'prompt': prompt}, timeout=300)
+        result.update(task_type='coding', files=list_files(project_id))
+        return result
+    if os.getenv('PROJECT_AI_ENGINE', 'ollama').lower() == 'codex':
         from codex_adapter import project, MODEL
         workspace(project_id, create=True)
         logger.info('Codex project build started | project_id=%s', project_id)
@@ -122,3 +128,12 @@ def build_project(project_id, prompt):
         result.update(success=False, files=[], error="Project workspace validation failed")
     logger.info("Project %s | Files detected: %d", "completed" if result["success"] else "failed", len(result["files"]))
     return result
+
+
+def local_worker(request, *, timeout, cancel_event=None):
+    process = run_worker([sys.executable, '-I', str(Path(__file__).with_name('ollama_projects.py'))],
+        input=json.dumps(request), cwd=str(workspace(request['project_id'])),
+        timeout=timeout, cancel_event=cancel_event)
+    if process.returncode:
+        return {'success': False, 'error': 'local_worker_failure'}
+    return json.loads(process.stdout)

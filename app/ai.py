@@ -10,7 +10,7 @@ SYSTEM_PROMPT = "You are a helpful personal assistant. Keep answers concise and 
 
 def active_ai_provider() -> str:
     """Return the configured adapter while retaining Ollama support."""
-    return os.getenv("AI_PROVIDER", "hermes").strip().lower()
+    return os.getenv("AI_PROVIDER", "ollama").strip().lower()
 
 
 def classify_ollama_error(error: Exception) -> str:
@@ -64,84 +64,8 @@ def build_messages(history: List[Dict], user_message: str):
 
 def call_ollama(history: List[Dict], user_message: str) -> str:
     """Call local Ollama model via HTTP API."""
-    base_url = os.getenv('OLLAMA_BASE_URL')
-    model = os.getenv('OLLAMA_MODEL')
-    
-    if not base_url:
-        raise RuntimeError("OLLAMA_BASE_URL not set in environment")
-    if not model:
-        raise RuntimeError("OLLAMA_MODEL not set in environment")
-    
-    messages = build_messages(history, user_message)
-    endpoint = f"{base_url}/api/chat"
-    
-    payload = {
-        "model": model,
-        "messages": messages,
-        "stream": False,
-    }
-    
-    try:
-        response = requests.post(endpoint, json=payload, timeout=60)
-        response.raise_for_status()
-        
-        data = response.json()
-        
-        # Extract the assistant's message from Ollama response
-        if "message" in data and "content" in data["message"]:
-            reply = data["message"]["content"]
-            if not reply or not isinstance(reply, str):
-                raise ValueError("Ollama returned empty or invalid message content")
-            return reply
-        else:
-            raise ValueError(f"Unexpected Ollama response format: {data}")
-    
-    except requests.exceptions.Timeout:
-        logger.error(
-            "Ollama request timed out: endpoint=%s model=%s",
-            endpoint,
-            model,
-        )
-        raise RuntimeError(f"Ollama request timed out after 60 seconds")
-    
-    except requests.exceptions.ConnectionError as e:
-        logger.error(
-            "Ollama connection failed: endpoint=%s model=%s error=%s",
-            endpoint,
-            model,
-            safe_error_message(e),
-        )
-        raise RuntimeError(f"Cannot connect to Ollama at {base_url}. Is Ollama running?")
-    
-    except requests.exceptions.HTTPError as e:
-        status_code = getattr(e.response, "status_code", "unknown")
-        logger.error(
-            "Ollama HTTP error: endpoint=%s status=%s model=%s error=%s",
-            endpoint,
-            status_code,
-            model,
-            safe_error_message(e),
-        )
-        raise RuntimeError(f"Ollama returned HTTP {status_code}")
-    
-    except ValueError as e:
-        logger.error(
-            "Ollama response parsing failed: endpoint=%s model=%s error=%s",
-            endpoint,
-            model,
-            safe_error_message(e),
-        )
-        raise RuntimeError(f"Ollama returned invalid response: {safe_error_message(e)}")
-    
-    except Exception as error:
-        category = classify_ollama_error(error)
-        logger.error(
-            "Ollama request failed: category=%s exception_type=%s message=%s",
-            category,
-            type(error).__name__,
-            safe_error_message(error),
-        )
-        raise RuntimeError(f"Ollama error ({category}): {safe_error_message(error)}")
+    from app.ollama_client import chat
+    return chat(build_messages(history, user_message))
 
 
 def call_hermes_router(history: List[Dict], user_message: str) -> Dict:
@@ -187,13 +111,13 @@ def call_hermes_router(history: List[Dict], user_message: str) -> Dict:
 
 
 def call_assistant(history: List[Dict], user_message: str) -> Dict:
-    """Dispatch to Hermes by default, with Ollama retained as an option."""
+    """Dispatch locally by default; online adapters require explicit selection."""
     provider = active_ai_provider()
     if provider == "ollama":
         return {
             "response": call_ollama(history, user_message),
             "task_type": "general",
-            "model": os.getenv("OLLAMA_MODEL"),
+            "model": os.getenv("OLLAMA_MODEL", "llama3.2:3b"),
             "provider": "ollama",
             "fallback_used": False,
         }

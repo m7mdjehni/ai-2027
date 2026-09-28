@@ -136,8 +136,8 @@ def observe(db, run_id, worker, kind, data):
     elif kind=='repair_started':
         run.status='repairing'
         if data['cycle'] > 3: raise ValueError('Repair limit')
-        db.add(ModelAttempt(run_id=run.id,repair_cycle=data['cycle'],model='gpt-5.6-sol',
-            provider='openai-codex',attempt_result='started'))
+        db.add(ModelAttempt(run_id=run.id,repair_cycle=data['cycle'],model=data.get('model', 'gpt-5.6-sol'),
+            provider=data.get('provider', 'openai-codex'),attempt_result='started'))
     elif kind=='repair_finished':
         attempt=db.scalar(select(ModelAttempt).where(ModelAttempt.run_id==run.id,
             ModelAttempt.repair_cycle==data['cycle']))

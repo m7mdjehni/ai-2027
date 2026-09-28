@@ -52,7 +52,11 @@ def fingerprint(errors):
 
 
 def repair_worker(project_id, revision, errors, cancel_event, timeout):
-    if os.getenv('PROJECT_AI_ENGINE', 'codex').lower() == 'codex':
+    if os.getenv('PROJECT_AI_ENGINE', 'ollama').lower() == 'ollama':
+        from hermes_projects import local_worker
+        return local_worker(dict(project_id=project_id, revision=revision,
+                            repair=True, errors=errors), timeout=timeout, cancel_event=cancel_event)
+    if os.getenv('PROJECT_AI_ENGINE', 'ollama').lower() == 'codex':
         from codex_adapter import project
         return project(project_id, 'Repair validation failures: ' + json.dumps(errors),
                        revision=revision, timeout=timeout, cancel_event=cancel_event)
@@ -88,6 +92,9 @@ def repair_project(project_id, revision, run_id, *, cancel_event=None, observer=
                   status='unresolved_validation_errors', reason=None, baseline=None,
                   validations=[], repairs=[], checkpoints=[], final_revision=None)
     result.update(PROJECT_MODELS['coding']['primary'])
+    if os.getenv('PROJECT_AI_ENGINE', 'ollama').lower() == 'ollama':
+        from app.ollama_client import model_name
+        result.update(provider='ollama', model=model_name())
 
     def stop(status, reason=None):
         result.update(status=status, reason=reason)
@@ -182,7 +189,7 @@ def repair_project(project_id, revision, run_id, *, cancel_event=None, observer=
                 return stop(reason)
             if cycle:
                 observe('repair_retry', {})
-            observe('repair_started', {'cycle':cycle+1})
+            observe('repair_started', {'cycle':cycle+1, 'model':result['model'], 'provider':result['provider']})
             repair_started = time.monotonic()
             try:
                 worker = repair_worker(project_id, current, errors, event,

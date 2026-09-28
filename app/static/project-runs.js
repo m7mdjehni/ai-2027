@@ -57,7 +57,7 @@
       this.base=`/api/projects/${projectId}`; this.key=`project-run-pending:${projectId}`;
       this.epoch=0; this.errors=0; this.events=new Map(); this.cursor=0; this.disposed=false;
       node('h3','Autonomous coding agent',root);
-      node('p','Validate this website, repair it with Hermes, and inspect the recorded results.',root);
+      node('p','Validate this website, repair it with the configured AI provider, and inspect the recorded results.',root);
       const actions=node('div','',root,'run-actions');
       this.validateButton=this.button('Validate',actions,() => this.validate());
       this.fixButton=this.button('Fix Project',actions,() => this.start());
