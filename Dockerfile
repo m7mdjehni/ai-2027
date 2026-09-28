@@ -7,7 +7,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ./app /app/app
 COPY ./compose.yaml /app/compose.yaml
-COPY ./.env.example /app/.env.example
 
 EXPOSE 8000
 

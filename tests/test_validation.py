@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -136,7 +137,8 @@ class ValidationUnitTests(unittest.TestCase):
         output = json.dumps({'success': False, 'error': secret, 'diagnostics': {
             'hermes_final_response': secret, 'hermes_error': secret, 'http_status': 400,
             'exception_type': 'BadRequestError', 'api_mode': 'codex_responses'}})
-        with patch('hermes_projects.hermes_python', return_value='trusted-python'), \
+        with patch.dict(os.environ, {'PROJECT_AI_ENGINE': 'hermes'}), \
+             patch('hermes_projects.hermes_python', return_value='trusted-python'), \
              patch('hermes_projects.run_worker', return_value=SimpleNamespace(returncode=0, stdout=output)), \
              self.assertLogs('hermes_projects', level='INFO') as logs:
             result = build_project('b' * 32, 'offline')

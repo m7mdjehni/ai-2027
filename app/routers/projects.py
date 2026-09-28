@@ -73,14 +73,17 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
     project_id = uuid.uuid4().hex
     name = re.sub(r"[^a-z0-9]+", "-", payload.prompt.lower()).strip("-")[:70].rstrip("-") or "project"
     row = Project(id=project_id, name=name, original_prompt=payload.prompt, status="building",
-                  message="Hermes is building your project")
+                  message="AI is building your project")
     db.add(row)
     db.commit()
     db.refresh(row)
     files = []
     try:
         url = os.getenv("HERMES_ROUTER_URL", "http://host.docker.internal:8765").rstrip("/")
-        timeout = max(10, int(os.getenv("HERMES_ROUTER_TIMEOUT", "620")))
+        try:
+            timeout = max(620, int(os.getenv("HERMES_ROUTER_TIMEOUT", "620")))
+        except ValueError:
+            timeout = 620
         response = requests.post(url + "/projects/build", json={"project_id": project_id, "prompt": payload.prompt},
                                  headers={"X-Project-Token": token}, timeout=timeout)
         response.raise_for_status()
@@ -96,7 +99,7 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
         # Detect on disk, never trust filenames claimed by an AI/HTTP response.
         files = actual_files(project_id)
         row.status = "completed" if result["success"] and files else "failed"
-        row.message = "Project created successfully" if row.status == "completed" else "Hermes did not complete the project; inspect any partial files and try a new build"
+        row.message = "Project created successfully" if row.status == "completed" else "AI did not complete the project; inspect any partial files and check the host CLI"
     except requests.Timeout:
         row.status = "unknown"
         row.message = "Host request timed out; execution may still be running. Check host logs before retrying"

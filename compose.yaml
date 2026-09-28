@@ -41,5 +41,22 @@ services:
       - ./generated_projects:/app/generated_projects:ro
     restart: on-failure
 
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes
+    restart: unless-stopped
+    command: ["gateway", "run"]
+    ports:
+      - "127.0.0.1:9119:9119"
+    volumes:
+      - "~/.hermes:/opt/data"
+    environment:
+      - TZ=Etc/UTC
+      - LOG_LEVEL=info
+      # Optional OpenAI-compatible API:
+      # - API_SERVER_ENABLED=1
+      # - API_SERVER_HOST=0.0.0.0
+      # - API_SERVER_KEY should never be committed; use an environment variable or secret configuration.
+
 volumes:
   pgdata:

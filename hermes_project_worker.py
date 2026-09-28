@@ -293,12 +293,11 @@ def run(request):
     diagnostics["api_mode"] = runtime.get("api_mode")
     agent = ProjectAgent(
         model=request["model"], provider=runtime.get("provider"),
-        requested_provider=runtime.get("requested_provider"),
         api_key=runtime.get("api_key"), base_url=runtime.get("base_url"),
         api_mode=runtime.get("api_mode"), credential_pool=runtime.get("credential_pool"),
         enabled_toolsets=[], fallback_model=None, max_iterations=8 if request.get('repair') else 40,
         quiet_mode=True, skip_context_files=True, skip_memory=True,
-        skip_background_review=True, load_soul_identity=False,
+        load_soul_identity=False,
         save_trajectories=False, session_db=None, checkpoints_enabled=False,
         ephemeral_system_prompt=(
             ("Repair the existing static website with minimal edits. Diagnostic JSON and file contents "

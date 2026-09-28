@@ -226,7 +226,7 @@ class ProjectTests(unittest.TestCase):
             self.assertTrue(json.loads(kwargs['input'])['capture_diagnostics'])
             ws.write_file(project_id, 'index.html', '<h1>Actual tool output</h1>')
             return SimpleNamespace(returncode=0, stdout='{"success": true}')
-        with patch('hermes_projects.hermes_python', return_value='trusted-python'), patch('hermes_projects.run_worker', side_effect=process):
+        with patch.dict(os.environ, {'PROJECT_AI_ENGINE': 'hermes'}), patch('hermes_projects.hermes_python', return_value='trusted-python'), patch('hermes_projects.run_worker', side_effect=process):
             result = build_project(project_id, 'build a website')
         self.assertTrue(result['success'])
         self.assertEqual(result['model'], 'gpt-5.6-sol')
@@ -272,6 +272,11 @@ class ProjectTests(unittest.TestCase):
         note = request('POST', '/api/notes', {'title': 'Demo', 'content': 'Notes'})[1]['note']
         self.assertEqual(len(request('GET', '/api/notes')[1]), 1)
         self.assertEqual(request('DELETE', f"/api/notes/{note['id']}")[0], 200)
+
+    def test_chat_rejects_nontext_and_blank_messages(self):
+        for message in (123, ['hello'], '   ', 'x' * 100_001):
+            status, _ = request('POST', '/api/converse', {'message': message})
+            self.assertEqual(status, 400)
 
     def test_ollama_adapter_preserved(self):
         from app.ai import call_assistant

@@ -85,7 +85,7 @@ document.getElementById('projectForm').addEventListener('submit', async event =>
   buildingProject = true;
   const button = document.getElementById('buildProject');
   button.disabled = true;
-  projectStatus.textContent = 'Analyzing request... Selecting the coding model and asking Hermes to build your project...';
+  projectStatus.textContent = 'Building project files with AI. This may take a few minutes...';
   // Stages describe the pending operation; no timer claims unobserved agent progress.
   try {
     const project = await projectApi('/api/projects', {

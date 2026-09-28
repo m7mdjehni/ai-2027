@@ -1,5 +1,6 @@
 """Synchronous bounded repairs. No durable jobs, provider SDK, or model-selected commands."""
 import json
+import os
 import threading
 import time
 from pathlib import Path
@@ -51,6 +52,10 @@ def fingerprint(errors):
 
 
 def repair_worker(project_id, revision, errors, cancel_event, timeout):
+    if os.getenv('PROJECT_AI_ENGINE', 'codex').lower() == 'codex':
+        from codex_adapter import project
+        return project(project_id, 'Repair validation failures: ' + json.dumps(errors),
+                       revision=revision, timeout=timeout, cancel_event=cancel_event)
     request = dict(PROJECT_MODELS['coding']['primary'])
     request.update(project_id=project_id, repair=True, revision=revision, capture_diagnostics=True,
         prompt='Repair this existing static website using only the project tools. '

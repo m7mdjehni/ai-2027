@@ -171,6 +171,8 @@ def call_hermes_router(history: List[Dict], user_message: str) -> Dict:
         data = response.json()
     except ValueError as error:
         raise RuntimeError("Hermes router returned invalid JSON") from error
+    if not isinstance(data, dict):
+        raise RuntimeError("Hermes router returned an invalid response")
     if not response.ok or not data.get("success"):
         safe_error = data.get("error") if isinstance(data.get("error"), str) else "routing failed"
         raise RuntimeError(f"Hermes router error: {safe_error}")
@@ -195,6 +197,6 @@ def call_assistant(history: List[Dict], user_message: str) -> Dict:
             "provider": "ollama",
             "fallback_used": False,
         }
-    if provider == "hermes":
+    if provider in {"hermes", "codex"}:
         return call_hermes_router(history, user_message)
-    raise RuntimeError("AI_PROVIDER must be either 'hermes' or 'ollama'")
+    raise RuntimeError("AI_PROVIDER must be 'codex', 'hermes', or 'ollama'")

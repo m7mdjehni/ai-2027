@@ -13,7 +13,9 @@ from dotenv import load_dotenv
 
 from hermes_router import route_prompt
 
-load_dotenv()
+from pathlib import Path
+
+load_dotenv(Path(__file__).with_name('.env'))
 logging.basicConfig(
     level=os.getenv("HERMES_LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -74,7 +76,7 @@ def project_build(request: ProjectRequest, x_project_token: str = Header(default
     except FileExistsError:
         raise HTTPException(409, "Project workspace already exists")
     except (ValueError, OSError):
-        raise HTTPException(503, "Project workspace or Hermes Python is unavailable; check host configuration")
+        raise HTTPException(503, "Project workspace or AI runtime is unavailable; check host configuration")
     finally:
         project_slots.release()
 

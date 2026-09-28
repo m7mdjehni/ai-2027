@@ -25,7 +25,8 @@ def run_worker(command, *, input, cwd, timeout, **kwargs):
     """On Windows, terminate the Python launcher's entire tree before fallback."""
     with subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE, text=True, encoding="utf-8", cwd=cwd,
-                          shell=False) as process:
+                          shell=False, env=kwargs.get('env'),
+                          start_new_session=os.name != 'nt') as process:
         try:
             cancel_event = kwargs.get('cancel_event')
             if cancel_event is None:
@@ -50,7 +51,8 @@ def run_worker(command, *, input, cwd, timeout, **kwargs):
                     if cleanup.returncode:
                         raise RuntimeError("Worker tree termination could not be confirmed")
                 else:
-                    process.kill()
+                    import signal
+                    os.killpg(process.pid, signal.SIGKILL)
                 process.communicate(timeout=10)
             except (OSError, subprocess.TimeoutExpired, RuntimeError) as error:
                 process.kill()
@@ -70,6 +72,16 @@ def hermes_python():
 
 
 def build_project(project_id, prompt):
+    if os.getenv('PROJECT_AI_ENGINE', 'codex').lower() == 'codex':
+        from codex_adapter import project, MODEL
+        workspace(project_id, create=True)
+        logger.info('Codex project build started | project_id=%s', project_id)
+        result = project(project_id, prompt, timeout=min(_project_worker_timeout(), 540))
+        result.update(task_type='coding', model=MODEL, provider='openai-codex',
+                      fallback_used=False, files=list_files(project_id))
+        logger.info('Codex project build finished | project_id=%s success=%s file_count=%d',
+                    project_id, result['success'], len(result['files']))
+        return result
     executable = hermes_python()
     target = workspace(project_id, create=True)
     logger.info("PROJECT BUILDER | Task: development request | Workspace: generated_projects/%s", project_id)

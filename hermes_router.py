@@ -155,8 +155,13 @@ def route_prompt(prompt: str, history: Optional[List[Dict[str, str]]] = None, *,
     if not clean_prompt:
         return RouteResult(False, "reasoning", "", "", False, error="Prompt is required")
     task_type = task_type_override or classify_task(clean_prompt)
-    execute = runner or run_hermes
-    config = (routing_models or MODELS)[task_type]
+    if runner is None and os.getenv('CHAT_AI_ENGINE', 'codex').lower() == 'codex':
+        from codex_adapter import chat, MODEL
+        execute = chat
+        config = {'primary': {'model': MODEL, 'provider': 'openai-codex'}, 'fallback': None}
+    else:
+        execute = runner or run_hermes
+        config = (routing_models or MODELS)[task_type]
     primary, fallback = config["primary"], config["fallback"]
     agent_prompt = build_agent_prompt(clean_prompt, history)
 

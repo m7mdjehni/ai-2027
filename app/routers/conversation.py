@@ -36,8 +36,8 @@ def ollama_http_error(error: Exception):
 def converse(payload: dict, db: Session = Depends(get_db)):
     # payload: {"message": "..."}
     message = payload.get('message')
-    if not message:
-        raise HTTPException(status_code=400, detail="message is required")
+    if not isinstance(message, str) or not message.strip() or len(message) > 100_000:
+        raise HTTPException(status_code=400, detail="message must be nonempty text (maximum 100000 characters)")
     # get recent conversation history
     history = crud.list_conversations(db, limit=20)
     history_serialized = [{"role": h.role, "message": h.message} for h in history]
