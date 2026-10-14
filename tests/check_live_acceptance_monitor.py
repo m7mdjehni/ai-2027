@@ -26,7 +26,7 @@ def main():
             route.continue_()  # Real local backend responses, never substituted fixture data.
         context.route('**/*',gate)
         page=context.new_page();page.on('pageerror',lambda error:errors.append(type(error).__name__))
-        page.goto(f'http://localhost:8000/static/index.html#project={project}&run={run_id}')
+        page.goto(f'http://localhost:8000/static/builder.html#project={project}&run={run_id}')
         monitor=page.locator('.run-monitor');monitor.locator('.run-final').wait_for()
         content=monitor.inner_text()
         assert run_id in content and 'gpt-5.6-sol' in content and 'openai-codex' in content

@@ -98,8 +98,25 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
         row.fallback_used = result.get("fallback_used") is True
         # Detect on disk, never trust filenames claimed by an AI/HTTP response.
         files = actual_files(project_id)
-        row.status = "completed" if result["success"] and files else "failed"
-        row.message = "Project created successfully" if row.status == "completed" else "AI did not complete the project; inspect any partial files and check the host CLI"
+        validation_passed = False
+        if result["success"] and files:
+            try:
+                revision = capture_revision(project_id)[0]
+                validation_response = requests.post(
+                    url + "/projects/validate",
+                    json={"project_id": project_id, "revision": revision},
+                    headers={"X-Project-Token": token},
+                    timeout=75,
+                    allow_redirects=False,
+                )
+                if validation_response.status_code == 200:
+                    validation_result = validation_response.json()
+                    validation_passed = bool(validation_result.get("passed"))
+            except (requests.RequestException, ValueError, OSError):
+                validation_passed = False
+        row.status = "completed" if result["success"] and files and validation_passed else "failed"
+        row.message = ("Project created successfully" if row.status == "completed"
+                       else "AI did not complete the project or validation failed before baseline demo")
     except requests.Timeout:
         row.status = "unknown"
         row.message = "Host request timed out; execution may still be running. Check host logs before retrying"

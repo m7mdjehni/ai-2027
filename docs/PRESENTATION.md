@@ -1,50 +1,16 @@
-# Presentation (12-15 slides)
+# Kiln Presentation Outline
 
-Slide 1 — Title
-- Project: AI Personal Assistant Using Docker
-- Your name, course, date
-
-Slide 2 — Abstract
-- Short project summary
-- Main technologies
-
-Slide 3 — Problem Statement
-- Why a personal assistant is useful
-
-Slide 4 — Objectives
-- List objectives
-
-Slide 5 — Environment
-- Hardware and software bullets (use screenshots)
-
-Slide 6 — Architecture Diagram
-- Include mermaid diagram from README
-
-Slide 7 — Backend Design
-- FastAPI, DB, AI integration
-
-Slide 8 — Docker Setup
-- Services and compose
-
-Slide 9 — Database
-- Postgres schema and screenshots
-
-Slide 10 — Demo Plan
-- Steps to demo the assistant
-
-Slide 11 — Testing & Results
-- What was tested and key results
-
-Slide 12 — Challenges & Solutions
-- Short list
-
-Slide 13 — Future Work
-- Extensions and improvements
-
-Slide 14 — Conclusion
-- Summary points
-
-Slide 15 — References
-- Libraries, APIs, docs
-
-For each slide: speaker notes should explain the bullets in one or two sentences. Use screenshots from docs/SCREENSHOTS.md as recommended visuals.
+1. **Purpose:** local autonomous website project generation.
+2. **Workflow:** brief, Ollama generation, saved files, static validation, and
+	bounded repair.
+3. **Architecture:** FastAPI, PostgreSQL, Windows helper, Ollama, validator, and
+	isolated preview.
+4. **Local models:** random local selection between `qwen2.5:1.5b` and
+   `llama3.2:3b`, with context 2048, q4_0 KV cache, and one parallel request.
+5. **Project data:** local files plus persisted project and run history.
+6. **Safety boundaries:** local-only model routing, no external validator
+	network, preview CSP, and inert source display.
+7. **Demonstration:** follow [DEMO.md](DEMO.md) with an example project brief.
+8. **Verification:** report only checks actually run; disclose Docker/database
+	blockers and validation limitations.
+9. **Offline test:** physical network disconnection remains a manual user test.

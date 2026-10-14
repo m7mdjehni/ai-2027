@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#202522">
+  <title>Kiln | Autonomous Project Builder</title>
+  <link rel="stylesheet" href="/static/builder.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/static/builder.html" aria-label="Kiln project builder home">
+      <span class="brand-mark" aria-hidden="true">K</span>
+      <span class="brand-name">kiln<span class="brand-period">.</span></span>
+    </a>
+    <div class="product-label">AUTONOMOUS PROJECT BUILDER</div>
+    <div class="runtime-status" aria-live="polite">
+      <span class="runtime-led" aria-hidden="true"></span>
+      <span id="modelStatusText">LOCAL MODEL</span>
+      <span class="runtime-divider"></span>
+      <strong id="modelName">Qwen 2.5 + Llama 3.2 (random local)</strong>
+      <span id="modelLabel">Ollama</span>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <section class="intro" aria-labelledby="pageTitle">
+      <div class="intro-copy">
+        <p class="eyebrow">IDEA IN / PROJECT OUT</p>
+        <h1 id="pageTitle">Build it. Check it.<br><em>Make it ready.</em></h1>
+        <p class="intro-description">Describe the site you need. Kiln generates local files, checks them in an isolated validator, and can repair detected issues with a randomly selected local model.</p>
+      </div>
+      <div class="workflow" aria-label="Build workflow">
+        <div class="workflow-step current"><span>01</span><b>Brief</b></div>
+        <i aria-hidden="true"></i>
+        <div class="workflow-step"><span>02</span><b>Generate</b></div>
+        <i aria-hidden="true"></i>
+        <div class="workflow-step"><span>03</span><b>Validate</b></div>
+        <i aria-hidden="true"></i>
+        <div class="workflow-step"><span>04</span><b>Repair</b></div>
+      </div>
+    </section>
+
+    <section class="builder-layout" aria-label="Project builder">
+      <div class="builder-column">
+        <section class="panel brief-panel" aria-labelledby="briefTitle">
+          <div class="panel-topline"><span class="panel-index">01</span><span>NEW PROJECT</span></div>
+          <h2 id="briefTitle">Start with a brief</h2>
+          <p class="panel-description">Tell the local models what to make and what a good result should feel like.</p>
+          <form id="projectForm">
+            <label for="projectPrompt">Project description</label>
+            <textarea id="projectPrompt" required maxlength="12000" placeholder="Create a responsive coffee shop website with Home, Menu, and Contact. Use a warm editorial style, a clear menu, opening hours, and a mobile-friendly layout."></textarea>
+            <div class="brief-footer">
+              <span class="local-only"><span aria-hidden="true">●</span> Prompt stays on this machine</span>
+              <button id="buildProject" type="submit"><span aria-hidden="true">↗</span> Generate project</button>
+            </div>
+          </form>
+          <p id="projectStatus" class="project-status" role="status" aria-live="polite"></p>
+          <div id="projectResult" class="project-result" aria-live="polite"></div>
+        </section>
+
+        <section class="panel chat-panel" aria-labelledby="chatTitle">
+          <div class="panel-topline"><span class="panel-index">03</span><span>LOCAL ASSISTANT</span></div>
+          <h2 id="chatTitle">Chat with your local models</h2>
+          <div id="chatMessages" class="chat-messages" aria-live="polite">
+            <div class="chat-message bot">Hi! Ask me anything, or try a quick calculation like 10 × 10.</div>
+          </div>
+          <form id="chatForm" class="chat-form">
+            <label for="chatInput" class="sr-only">Message</label>
+            <input id="chatInput" type="text" maxlength="4000" placeholder="Type a message..." autocomplete="off">
+            <button id="sendChat" type="submit">Send</button>
+          </form>
+          <p id="chatStatus" class="chat-status" role="status" aria-live="polite"></p>
+        </section>
+      </div>
+
+      <aside class="panel history-panel" aria-labelledby="historyTitle">
+        <div class="history-heading">
+          <div>
+            <div class="panel-topline"><span class="panel-index">02</span><span>LOCAL WORKSPACE</span></div>
+            <h2 id="historyTitle">Your projects</h2>
+          </div>
+          <button id="refreshProjects" class="icon-button" type="button" aria-label="Refresh project history" title="Refresh history">↻</button>
+        </div>
+        <div id="projectHistory" class="project-history" aria-live="polite">
+          <div class="history-loading"><span class="loading-pulse"></span> Loading saved projects</div>
+        </div>
+        <div class="history-note"><span aria-hidden="true">⌂</span><p>Project files and run history are stored locally. No cloud model is used.</p></div>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const modelDisplayNames = {
+      'qwen2.5:1.5b': 'Qwen 2.5 1.5B',
+      'llama3.2:3b': 'Llama 3.2 3B'
+    };
+    const providerDisplayNames = {ollama: 'Ollama'};
+    function updateModelStatus(data) {
+      const local = data.provider === 'ollama';
+      const models = [...new Set(data.models_used || [data.model])];
+      const shownModels = models.map(model => modelDisplayNames[model] || model);
+      document.getElementById('modelName').textContent = shownModels.length > 1
+        ? `${shownModels.join(' + ')} (random local)` : shownModels[0] || data.model;
+      document.getElementById('modelLabel').textContent = providerDisplayNames[data.provider] || 'Ollama';
+      document.getElementById('modelStatusText').textContent = data.success ? 'BUILD READY' : 'BUILD CHECKED';
+      document.querySelector('.runtime-status').classList.toggle('runtime-warning', !local);
+    }
+
+    const chatMessages = document.getElementById('chatMessages');
+    const chatStatus = document.getElementById('chatStatus');
+    const chatForm = document.getElementById('chatForm');
+    const chatInput = document.getElementById('chatInput');
+
+    function appendChatBubble(role, text) {
+      const bubble = document.createElement('div');
+      bubble.className = `chat-message ${role}`;
+      bubble.textContent = text;
+      chatMessages.appendChild(bubble);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    async function submitChat(event) {
+      event.preventDefault();
+      const prompt = chatInput.value.trim();
+      if (!prompt) return;
+
+      appendChatBubble('user', prompt);
+      chatInput.value = '';
+      chatStatus.textContent = 'Thinking...';
+      chatForm.querySelector('button').disabled = true;
+
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.detail || 'The assistant could not provide a response.');
+        }
+        appendChatBubble('bot', data.response || 'No response was returned.');
+        chatStatus.textContent = `Answered by ${modelDisplayNames[data.model] || data.model || providerDisplayNames[data.provider] || 'your local model'}`;
+      } catch (error) {
+        appendChatBubble('bot', error.message || 'Something went wrong.');
+        chatStatus.textContent = 'Could not reach the local assistant. Please try again.';
+      } finally {
+        chatForm.querySelector('button').disabled = false;
+        chatInput.focus();
+      }
+    }
+
+    chatForm.addEventListener('submit', submitChat);
+  </script>
+  <script src="/static/project-runs.js"></script>
+  <script src="/static/projects.js"></script>
+</body>
+</html>

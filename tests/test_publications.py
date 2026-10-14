@@ -157,19 +157,11 @@ class Publications(unittest.TestCase):
         with patch.object(Path, 'lstat', return_value=info), self.assertRaises(ValueError):
             ws.reject_link(self.root)
 
-    def test_api_origin_and_live_gate(self):
+    def test_publication_http_routes_are_not_mounted(self):
         from app.main import app
-        from app.database import get_db
         from test_projects import request
-        def database():
-            with self.sessions() as db: yield db
-        app.dependency_overrides[get_db] = database
-        self.addCleanup(app.dependency_overrides.clear)
         url = '/api/projects/'+self.project+'/publications/'+'c'*32+'/confirm'
-        with patch.dict(os.environ, {'PUBLICATION_ORIGIN':'http://test','GITHUB_PUBLICATION_ENABLED':'0'}):
-            self.assertEqual(request('POST', url, {})[0], 403)
-            self.assertEqual(request('POST', url, {}, headers=[(b'origin',b'http://evil.test')])[0], 403)
-            self.assertEqual(request('POST', url, {}, headers=[(b'origin',b'http://test')])[0], 503)
+        self.assertEqual(request('POST', url, {}, application=app)[0], 404)
 
     def test_authenticated_host_handoff_has_no_provider(self):
         from test_projects import request, host_app

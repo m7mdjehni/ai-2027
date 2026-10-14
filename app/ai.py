@@ -2,6 +2,7 @@ import os
 import logging
 import requests
 from typing import List, Dict
+from app.ollama_client import chat_with_model
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,10 @@ def call_ollama(history: List[Dict], user_message: str) -> str:
     return chat(build_messages(history, user_message))
 
 
+def call_ollama_with_model(history: List[Dict], user_message: str):
+    return chat_with_model(build_messages(history, user_message))
+
+
 def call_hermes_router(history: List[Dict], user_message: str) -> Dict:
     """Call the Hermes router running on Windows from the Docker backend."""
     base_url = os.getenv("HERMES_ROUTER_URL", "http://host.docker.internal:8765").rstrip("/")
@@ -114,10 +119,12 @@ def call_assistant(history: List[Dict], user_message: str) -> Dict:
     """Dispatch locally by default; online adapters require explicit selection."""
     provider = active_ai_provider()
     if provider == "ollama":
+        response, model = call_ollama_with_model(history, user_message)
         return {
-            "response": call_ollama(history, user_message),
+            "response": response,
             "task_type": "general",
-            "model": os.getenv("OLLAMA_MODEL", "llama3.2:3b"),
+            "model": model,
+            "models_used": [model],
             "provider": "ollama",
             "fallback_used": False,
         }

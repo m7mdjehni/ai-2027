@@ -47,9 +47,10 @@ def main():
                 except OSError: pass
             record('public_tcp_probes_unreachable')
         tags = call('GET', '/api/tags', base='http://127.0.0.1:11434')
-        assert any(m['name'] == 'llama3.2:3b' for m in tags['models'])
+        available_models = {m['name'] for m in tags['models']}
+        assert {'qwen2.5:1.5b', 'llama3.2:3b'} <= available_models
         record('ollama_model_available')
-        reply = call('POST', '/api/chat', {'model': 'llama3.2:3b', 'stream': False,
+        reply = call('POST', '/api/chat', {'model': 'qwen2.5:1.5b', 'stream': False,
                      'messages': [{'role': 'user', 'content': 'Reply exactly: LOCAL MODEL WORKING'}],
                      'options': {'temperature': 0}}, timeout=180, base='http://127.0.0.1:11434')
         assert reply['message']['content'].strip()
@@ -59,22 +60,21 @@ def main():
         health = call('GET', '/health', base='http://127.0.0.1:8766')
         assert health['project_engine'] == 'ollama'
         record('local_project_helper')
-        reply = call('POST', '/api/converse', {'message': 'Reply exactly: LOCAL CHAT WORKING'}, timeout=200)
-        assert reply['provider'] == 'ollama' and reply['model'] == 'llama3.2:3b' and reply['reply'].strip()
-        record('backend_local_chat', {k: reply[k] for k in ['provider', 'model', 'reply']})
-        marker = 'Offline audit ' + uuid.uuid4().hex[:8]
-        task = call('POST', '/api/tasks', {'title': marker})['task']
-        note = call('POST', '/api/notes', {'title': marker, 'content': 'Local persistence verification'})['note']
-        assert any(t['id'] == task['id'] for t in call('GET', '/api/tasks'))
-        assert any(n['id'] == note['id'] for n in call('GET', '/api/notes'))
-        assert call('POST', '/api/tasks/' + str(task['id']) + '/done', {'done': True})['done']
-        record('database_tasks_notes', {'task_id': task['id'], 'note_id': note['id']})
+        reply = call('POST', '/route', {'prompt': 'Reply exactly: LOCAL HELPER WORKING'}, timeout=200,
+                 base='http://127.0.0.1:8766')
+        assert reply['provider'] == 'ollama' and reply['model'] in {'qwen2.5:1.5b', 'llama3.2:3b'} and reply['response'].strip()
+        record('helper_local_model_response', {k: reply[k] for k in ['provider', 'model']})
         created = call('POST', '/api/projects', {'prompt': 'Create a simple responsive one-page student portfolio with Home, About, Projects, and Contact sections. Use index.html, styles.css, and script.js. Use only local assets and system fonts.'}, timeout=350)
         evidence['project_id'] = pid = created['project_id']
         assert created['success'] and created['provider'] == 'ollama', 'Local build failed'
-        assert created['model'] == 'llama3.2:3b' and created['fallback_used'] is False
+        assert created['model'] in {'qwen2.5:1.5b', 'llama3.2:3b'} and created['fallback_used'] is False
+        assert created.get('models_used')
+        assert set(created['models_used']) <= {'qwen2.5:1.5b', 'llama3.2:3b'}
         assert {'index.html', 'styles.css', 'script.js'} <= set(ws.list_files(pid))
         record('local_project_generation', {'provider': created['provider'], 'model': created['model'], 'files': ws.list_files(pid)})
+        persisted = call('GET', '/api/projects/' + pid)
+        assert persisted['project_id'] == pid
+        record('database_project_persistence', {'project_id': pid, 'status': persisted['status']})
         prefix = '/api/projects/' + pid
         def validate():
             rev = call('GET', prefix + '/revision')['revision']
@@ -125,7 +125,7 @@ def main():
             page.on('console', lambda message: errors.append(message.text) if message.type == 'error' else None)
             page.on('requestfailed', lambda request: failures.append(request.url))
             page.on('response', lambda response: failures.append(response.url) if response.status >= 400 else None)
-            for name, url in [('main_ui', 'http://127.0.0.1:8000/static/index.html'),
+            for name, url in [('builder_ui', 'http://127.0.0.1:8000/static/builder.html'),
                               ('new_project', 'http://127.0.0.1:8050/' + pid + '/index.html'),
                               *[(name, 'http://127.0.0.1:8050/' + demo_id + '/index.html')
                                 for name, demo_id in demos.items()]]:

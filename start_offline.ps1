@@ -29,12 +29,18 @@ try {
     Check-Exit 'Cached database and validator images'
     & ollama --version
     Check-Exit 'Ollama CLI'
+    $ollamaModels = & $python -c "from dotenv import load_dotenv; load_dotenv(); from app.ollama_client import model_names; print(','.join(model_names()))"
+    Check-Exit 'Ollama model configuration'
     $tags = Invoke-RestMethod 'http://127.0.0.1:11434/api/tags' -TimeoutSec 10
-    if ('llama3.2:3b' -notin $tags.models.name) { throw 'FAIL: llama3.2:3b must be installed during initial setup.' }
-    Write-Host 'PASS: Ollama service and local llama3.2:3b'
-    # Process-scoped overrides prevent an older private .env from selecting cloud chat.
+    $installedModels = @($tags.models.name)
+    $missingModels = @($ollamaModels -split ',' | Where-Object { $_ -notin $installedModels })
+    if ($missingModels.Count -gt 0) {
+        throw "FAIL: Install both configured local models before offline use: $($missingModels -join ', ')"
+    }
+    Write-Host "PASS: Ollama service and local models $ollamaModels"
+    # Keep the backend transport and project helper on the local Ollama stack.
     $env:AI_PROVIDER = 'ollama'
-    $env:OLLAMA_MODEL = 'llama3.2:3b'
+    $env:OLLAMA_MODELS = $ollamaModels
     $env:OLLAMA_BASE_URL = 'http://host.docker.internal:11434'
     $env:OLLAMA_HOST_BASE_URL = 'http://127.0.0.1:11434'
     $env:HERMES_ROUTER_URL = 'http://host.docker.internal:8766'
@@ -65,12 +71,12 @@ try {
     $previewHealth = Wait-Health $previewUrl
     if ($previewHealth.service -ne 'local-project-preview') { throw 'FAIL: unexpected preview service on port 8050.' }
     Write-Host 'PASS: local project preview'
-    $ui = Invoke-WebRequest -UseBasicParsing "$backendUrl/static/index.html" -TimeoutSec 10
+    $ui = Invoke-WebRequest -UseBasicParsing "$backendUrl/static/builder.html" -TimeoutSec 10
     if ($ui.StatusCode -ne 200) { throw 'FAIL: Web UI' }
     Write-Host 'PASS: Web UI'
     & docker compose ps
     Check-Exit 'Core service status'
-    Write-Host "READY: http://localhost:$backendPort/static/index.html"
+    Write-Host "READY: http://localhost:$backendPort/static/builder.html"
     Write-Host 'Local readiness does not prove Internet is disconnected.'
 } catch {
     Write-Error $_

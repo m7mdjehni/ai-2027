@@ -25,7 +25,7 @@ from hermes_projects import build_project, run_worker, _project_worker_timeout
 from hermes_project_worker import ProjectToolBoundary
 
 
-def request(method, url, body=None, application=app, headers=None):
+def request(method, url, body=None, application=app, headers=None, include_headers=False):
     """Exercise the real ASGI app without an extra HTTP client dependency."""
     async def execute():
         parts = urlsplit(url)
@@ -41,8 +41,12 @@ def request(method, url, body=None, application=app, headers=None):
                            "root_path": "", "headers": [(b"content-type", b"application/json"), *(headers or [])],
                            "server": ("test", 80), "client": ("test", 123)}, receive, send)
         status = next(item["status"] for item in output if item["type"] == "http.response.start")
+        response_headers = next(item["headers"] for item in output if item["type"] == "http.response.start")
         payload = b"".join(item.get("body", b"") for item in output if item["type"] == "http.response.body")
-        return status, json.loads(payload)
+        result = (status, json.loads(payload))
+        if include_headers:
+            return (*result, dict(response_headers))
+        return result
     return asyncio.run(execute())
 
 
@@ -69,14 +73,26 @@ class ProjectTests(unittest.TestCase):
         self.post.start()
         self.addCleanup(self.post.stop)
 
-    def fake_build(self, url, json, headers, timeout):
-        self.assertTrue(url.endswith('/projects/build'))
+    def test_application_content_policy_keeps_browser_requests_local(self):
+        status, _, headers = request("GET", "/", include_headers=True)
+        self.assertEqual(status, 200)
+        policy = headers[b"content-security-policy"].decode()
+        self.assertIn("connect-src 'self'", policy)
+        self.assertIn("object-src 'none'", policy)
+        self.assertIn("frame-ancestors 'none'", policy)
+
+    def fake_build(self, url, json, headers, timeout, **options):
         self.assertEqual(headers['X-Project-Token'], 't' * 40)
+        if url.endswith('/projects/validate'):
+            self.assertFalse(options.get('allow_redirects', True))
+            self.assertTrue(json.get('revision'))
+            return Mock(status_code=200, json=lambda: {'passed': True})
+        self.assertTrue(url.endswith('/projects/build'))
         project_id = json['project_id']
         ws.workspace(project_id, create=True)
         ws.write_file(project_id, 'index.html', '<h1>Coffee</h1><script>alert(1)</script>')
         ws.write_file(project_id, 'css/style.css', 'body { color: brown; }')
-        return Mock(json=lambda: {"success": True, "model": "gpt-5.6-sol", "provider": "openai-codex",
+        return Mock(status_code=200, json=lambda: {"success": True, "model": "gpt-5.6-sol", "provider": "openai-codex",
                                   "fallback_used": True, "files": ["imaginary.js"]}, raise_for_status=lambda: None)
 
     def create(self):
@@ -256,27 +272,17 @@ class ProjectTests(unittest.TestCase):
             self.assertEqual(terminate.call_args.args[0], ['taskkill', '/PID', '12345', '/T', '/F'])
             self.assertFalse(terminate.call_args.kwargs['shell'])
 
-    def test_existing_converse_tasks_notes(self):
-        metadata = {'response': 'Hello', 'task_type': 'reasoning', 'model': 'gpt-5.6-sol',
-                    'provider': 'openai-codex', 'fallback_used': False}
-        with patch('app.routers.conversation.call_assistant', return_value=metadata):
-            status, reply = request('POST', '/api/converse', {'message': 'Hello'})
-        self.assertEqual(status, 200)
-        self.assertEqual(reply['reply'], 'Hello')
-        self.assertEqual(reply['model'], metadata['model'])
-        self.assertEqual(len(request('GET', '/api/conversations')[1]), 2)
-        task = request('POST', '/api/tasks', {'title': 'Demo'})[1]['task']
-        self.assertEqual(len(request('GET', '/api/tasks')[1]), 1)
-        self.assertTrue(request('POST', f"/api/tasks/{task['id']}/done", {'done': True})[1]['done'])
-        self.assertEqual(request('DELETE', f"/api/tasks/{task['id']}")[0], 200)
-        note = request('POST', '/api/notes', {'title': 'Demo', 'content': 'Notes'})[1]['note']
-        self.assertEqual(len(request('GET', '/api/notes')[1]), 1)
-        self.assertEqual(request('DELETE', f"/api/notes/{note['id']}")[0], 200)
-
-    def test_chat_rejects_nontext_and_blank_messages(self):
-        for message in (123, ['hello'], '   ', 'x' * 100_001):
-            status, _ = request('POST', '/api/converse', {'message': message})
-            self.assertEqual(status, 400)
+    def test_general_product_routes_are_not_mounted(self):
+        for method, path, payload in [
+            ('POST', '/api/converse', {'message': 'Hello'}),
+            ('GET', '/api/conversations', None),
+            ('GET', '/api/tasks', None),
+            ('POST', '/api/tasks', {'title': 'Demo'}),
+            ('GET', '/api/notes', None),
+            ('POST', '/api/notes', {'title': 'Demo', 'content': 'Notes'}),
+        ]:
+            with self.subTest(method=method, path=path):
+                self.assertEqual(request(method, path, payload)[0], 404)
 
     def test_ollama_adapter_preserved(self):
         from app.ai import call_assistant

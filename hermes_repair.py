@@ -93,8 +93,7 @@ def repair_project(project_id, revision, run_id, *, cancel_event=None, observer=
                   validations=[], repairs=[], checkpoints=[], final_revision=None)
     result.update(PROJECT_MODELS['coding']['primary'])
     if os.getenv('PROJECT_AI_ENGINE', 'ollama').lower() == 'ollama':
-        from app.ollama_client import model_name
-        result.update(provider='ollama', model=model_name())
+        result.update(provider='ollama', model='random-local', models_used=[])
 
     def stop(status, reason=None):
         result.update(status=status, reason=reason)
@@ -199,6 +198,11 @@ def repair_project(project_id, revision, run_id, *, cancel_event=None, observer=
                 worker = {'success': False, 'error': 'worker_cleanup_unconfirmed'}
             except Exception:
                 worker = {'success': False, 'error': 'provider_failure'}
+            if worker.get('provider') == 'ollama':
+                result['models_used'] = list(dict.fromkeys(
+                    result['models_used'] + worker.get('models_used', [])))
+                if worker.get('model'):
+                    result['model'] = worker['model']
             new_revision, new_files = ws.capture_revision(project_id)
             changed = new_revision != current
             checkpoint(folder, cycle + 1, new_revision, new_files)
@@ -207,6 +211,7 @@ def repair_project(project_id, revision, run_id, *, cancel_event=None, observer=
             result['final_revision'] = new_revision
             observe('repair_finished', {'cycle':cycle+1, 'success':worker.get('success') is True,
                 'duration_ms':round((time.monotonic()-repair_started)*1000),
+                'model':worker.get('model'),
                 'revision':new_revision,'changed':changed,
                 'changed_files':sorted(name for name in set(files)|set(new_files) if files.get(name)!=new_files.get(name))})
             files = new_files

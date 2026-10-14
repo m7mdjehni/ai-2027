@@ -1,4 +1,4 @@
-﻿"""Trusted standalone validation -> durable run -> unchanged publication gate."""
+﻿"""Trusted standalone validation -> durable run; publication API stays unmounted."""
 import copy
 import os
 import tempfile
@@ -71,7 +71,7 @@ class StandaloneValidationTests(unittest.TestCase):
 
     def no_eligibility(self):
         with self.assertRaisesRegex(PublicationFailure,'validation_required'): self.preview()
-        self.assertFalse(request('GET',self.base+'/publications/eligibility')[1]['eligible'])
+        self.assertEqual(request('GET',self.base+'/publications/eligibility')[0],404)
 
     def test_pass_persists_and_preview_is_allowed_from_new_session(self):
         self.no_eligibility()
@@ -94,7 +94,7 @@ class StandaloneValidationTests(unittest.TestCase):
         self.assertEqual(len(detail['validations']),1); self.assertEqual(detail['attempts'],[])
         self.assertEqual([e['event_type'] for e in request('GET',self.base+'/runs/'+result['run_id']+'/events')[1]],
                          ['validation_started','validation_passed'])
-        self.assertTrue(request('GET',self.base+'/publications/eligibility')[1]['eligible'])
+        self.assertEqual(request('GET',self.base+'/publications/eligibility')[0],404)
         plan=self.preview(); self.assertEqual(plan.status,'preview')
         with self.sessions() as db:
             self.assertIsNone(db.get(Publication,plan.id).active_repository)

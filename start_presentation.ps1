@@ -75,7 +75,7 @@ try {
     }
     if (Test-Port 9119) { Write-Host 'Dashboard port 9119 is listening.' }
     else { Write-Host 'Dashboard is stopped; its Hermes executable needs Device Guard approval.' }
-    Write-Host 'Open http://localhost:8000/static/index.html'
+    Write-Host 'Open http://localhost:8000/static/builder.html'
     Write-Host 'ACP requires administrator approval of hermes.exe; startup does not bypass Device Guard.'
     Write-Host 'Live AI verification: .\.venv\Scripts\python.exe tests/check_presentation_flow.py'
 } finally {

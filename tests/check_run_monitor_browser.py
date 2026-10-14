@@ -85,7 +85,7 @@ def main():
             route.fulfill(json=data)
         context.route('**/*',route_request)
         page=context.new_page();page.on('pageerror',lambda e:errors.append(str(e)))
-        page.goto(f'http://phase4.test/static/index.html#project={PROJECT}&run={RUN}')
+        page.goto(f'http://phase4.test/static/builder.html#project={PROJECT}&run={RUN}')
         page.get_by_text('Validation Passed — Project repaired successfully',exact=True).wait_for()
         monitor=page.locator('.run-monitor')
         monitor.get_by_role('button',name='script.js',exact=True).click()
@@ -97,7 +97,7 @@ def main():
         run['attempts'][0]['attempt_result']='failed'
         events[-2].update(event_type='repair_unchanged',safe_summary='repair unchanged')
         events[-1].update(event_type='run_failed',safe_summary='run failed')
-        page.goto(f'http://phase4.test/static/index.html#project={PROJECT}&run={run["id"]}')
+        page.goto(f'http://phase4.test/static/builder.html#project={PROJECT}&run={run["id"]}')
         page.reload()
         page.get_by_text('Provider failure — The model request did not complete',exact=True).wait_for()
         monitor.screenshot(path=str(screenshots/'phase4-provider-failure.png'))

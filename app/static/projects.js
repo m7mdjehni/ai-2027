@@ -4,10 +4,13 @@ const projectHistory = document.getElementById('projectHistory');
 const projectResult = document.getElementById('projectResult');
 let buildingProject = false;
 let projectRunUI = null;
-let projectPublishUI = null;
 
 async function projectApi(url, options) {
   const response = await fetch(url, options);
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.toLowerCase().includes('application/json')) {
+    throw new Error(`Project API returned ${contentType || 'an unknown content type'} instead of JSON (HTTP ${response.status}). Open this workspace through the FastAPI UI, not a static file server.`);
+  }
   const data = await response.json();
   if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Project request failed.');
   return data;
@@ -24,7 +27,7 @@ async function loadProjects() {
   try {
     const projects = await projectApi('/api/projects');
     projectHistory.replaceChildren();
-    if (!projects.length) projectElement('p', 'No projects yet. Describe your first project above.', projectHistory);
+    if (!projects.length) projectElement('p', 'No builds yet. Your generated projects will be saved here.', projectHistory).className = 'history-empty';
     for (const project of projects) {
       const button = projectElement('button', `${project.project_name} — ${project.status}`, projectHistory);
       button.className = 'project-history-item';
@@ -33,12 +36,14 @@ async function loadProjects() {
         catch (error) { projectStatus.textContent = error.message; }
       });
     }
-  } catch (error) { projectHistory.textContent = error.message; }
+  } catch (error) {
+    projectHistory.replaceChildren();
+    projectElement('p', error.message, projectHistory).className = 'history-empty history-error';
+  }
 }
 
 function showProject(project) {
   projectRunUI?.dispose();
-  projectPublishUI?.dispose();
   projectResult.replaceChildren();
   projectElement('h3', project.project_name, projectResult);
   projectElement('p', `Status: ${project.status}`, projectResult);
@@ -46,6 +51,15 @@ function showProject(project) {
   projectElement('p', `Provider: ${providerDisplayNames[project.provider] || project.provider || 'Unavailable'}`, projectResult);
   projectElement('p', `Fallback used: ${project.fallback_used ? 'Yes' : 'No'}`, projectResult);
   projectElement('p', project.message || '', projectResult);
+  if (project.preview_pending && /^[a-f0-9]{32}$/.test(project.project_id || '')) {
+    const actions = projectElement('div', '', projectResult);
+    actions.className = 'project-actions';
+    const preview = projectElement('a', 'Open local preview', actions);
+    preview.className = 'preview-link';
+    preview.href = `http://127.0.0.1:8050/${project.project_id}/index.html`;
+    preview.target = '_blank';
+    preview.rel = 'noopener noreferrer';
+  }
   projectElement('h4', 'Generated files', projectResult);
   const files = projectElement('div', '', projectResult);
   files.className = 'project-file-list';
@@ -66,15 +80,10 @@ function showProject(project) {
     button.addEventListener('click', () => openFile(path));
   }
   if (!project.files?.length) projectElement('p', 'No generated files detected.', files);
-  if (project.preview_pending) projectElement('p', 'Files open as text. Generated websites are not executed or previewed here.', projectResult);
+  if (project.preview_pending) projectElement('p', 'Preview runs on a separate local origin; generated files remain isolated from this application.', projectResult);
   if (globalThis.ProjectRunUI) {
     const runRoot = projectElement('div', '', projectResult);
-    projectRunUI = new globalThis.ProjectRunUI(runRoot, project.project_id, openFile, () => {
-      if (projectPublishUI?.project === project.project_id) return projectPublishUI.refreshEligibility();
-    });
-  }
-  if (globalThis.ProjectPublishUI) {
-    projectPublishUI = new globalThis.ProjectPublishUI(projectElement('div', '', projectResult), project.project_id, project.project_name);
+    projectRunUI = new globalThis.ProjectRunUI(runRoot, project.project_id, openFile);
   }
 }
 
@@ -106,14 +115,15 @@ document.getElementById('projectForm').addEventListener('submit', async event =>
   }
 });
 
-document.querySelector('[data-tab="projects"]').addEventListener('click', loadProjects);
+document.getElementById('refreshProjects').addEventListener('click', loadProjects);
+loadProjects();
 
 // Reload reconstructs the selected monitor from the persisted run, not local stages.
 if (globalThis.location?.hash) {
   const params = new URLSearchParams(globalThis.location.hash.slice(1));
   const selected = params.get('project');
   if (/^[a-f0-9]{32}$/.test(selected || '')) {
-    document.querySelector('[data-tab="projects"]').click();
+    loadProjects();
     projectApi(`/api/projects/${selected}`).then(showProject).catch(() => {
       projectStatus.textContent = 'The saved project could not be loaded. Reopen it from project history.';
     });

@@ -47,10 +47,11 @@ def health():
 def route(request: RouteRequest):
     history = [item.dict() for item in request.history] if request.history else None
     if os.getenv('AI_PROVIDER', 'ollama') == 'ollama':
-        from app.ollama_client import chat, model_name
+        from app.ollama_client import chat_with_model
         from app.ai import build_messages
-        return {'success': True, 'response': chat(build_messages(history or [], request.prompt), host=True),
-                'provider': 'ollama', 'model': model_name(), 'task_type': 'general', 'fallback_used': False}
+        response, model = chat_with_model(build_messages(history or [], request.prompt), host=True)
+        return {'success': True, 'response': response, 'provider': 'ollama', 'model': model,
+                'models_used': [model], 'task_type': 'general', 'fallback_used': False}
     result = route_prompt(request.prompt, history).to_dict()
     if result["success"]:
         return result

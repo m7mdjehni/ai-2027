@@ -1,5 +1,8 @@
 # Offline conversion audit
 
+Historical acceptance and model details below describe the run on 28 September
+2026; the current local model pool randomly selects Qwen 2.5 or Llama 3.2.
+
 ## Dependency map before edits (28 September 2026)
 
 - Browser assets: `app/static/`; relative API requests, no required CDN found.

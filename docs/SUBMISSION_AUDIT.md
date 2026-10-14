@@ -4,7 +4,8 @@ Updated 28 September 2026. This replaces the earlier online-default audit.
 
 ## Current architecture
 
-Browser -> FastAPI (Docker) -> host Ollama / `llama3.2:3b` for chat.
+Browser -> FastAPI (Docker) -> host Ollama / randomly selected local Qwen 2.5 or
+Llama 3.2 for chat.
 FastAPI -> authenticated local Python helper on port 8766 for generation,
 network-disabled Docker validation, and local Ollama repair. PostgreSQL 15
 stores application data and run history. Preview runs on loopback port 8050.

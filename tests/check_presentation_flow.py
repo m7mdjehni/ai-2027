@@ -27,7 +27,7 @@ def main():
     session = requests.Session()
     session.trust_env = False
 
-    health = session.get('http://localhost:8765/health', timeout=10, allow_redirects=False)
+    health = session.get('http://localhost:8766/health', timeout=10, allow_redirects=False)
     if health.status_code != 200 or health.json().get('status') != 'ok':
         raise RuntimeError('Host health check failed')
     print('Host health passed', flush=True)
@@ -40,10 +40,13 @@ def main():
 
     call('GET', '/')
     print('Backend reachable', flush=True)
-    reply = call('POST', '/api/converse', {'message': 'Explain autonomous coding agents in one sentence.'}, timeout=330)
-    if not isinstance(reply.get('reply'), str) or not reply['reply'].strip():
-        raise RuntimeError('Chat returned no answer')
-    print('Chat passed', flush=True)
+    helper = session.post('http://localhost:8766/route', json={'prompt': 'Reply in one short sentence: local model ready.'}, timeout=180, allow_redirects=False)
+    if helper.status_code != 200 or not helper.headers.get('content-type', '').startswith('application/json'):
+        raise RuntimeError('Local helper inference failed')
+    response = helper.json()
+    if response.get('provider') != 'ollama' or response.get('model') not in {'qwen2.5:1.5b', 'llama3.2:3b'} or not response.get('response', '').strip():
+        raise RuntimeError('Local helper inference returned no response')
+    print('Local helper inference passed', flush=True)
     created = call('POST', '/api/projects', {'prompt': 'Create a modern responsive coffee shop website with Home, About, Menu, and Contact sections. Use index.html, styles.css, and script.js with a working mobile menu.'}, timeout=630)
     pid = created['project_id']
     ws.validate_id(pid)
